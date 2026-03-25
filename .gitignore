@@ -1,0 +1,19 @@
+# API Keys — לעולם אל תשמור כאן
+.env
+.env.local
+*.key
+
+# OS
+.DS_Store
+Thumbs.db
+
+# VS Code
+.vscode/settings.json
+
+# Node (אם תוסיפי server בעתיד)
+node_modules/
+package-lock.json
+
+# Examples עם מידע רגיש — אל תעלי ל-git ציבורי
+examples/*.pdf
+examples/real_*

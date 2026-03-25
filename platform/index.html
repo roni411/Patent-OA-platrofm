@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Patent OA Analyzer v2</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Noto+Serif+Hebrew:wght@300;400;600&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+  :root {
+    --bg: #f7f6f2;
+    --surface: #ffffff;
+    --surface2: #f0efeb;
+    --surface3: #e8e7e2;
+    --border: #d4d2cc;
+    --accent: #8b6420;
+    --accent2: #2563a0;
+    --text: #1a1a18;
+    --text-muted: #6b6860;
+    --success: #2a7a50;
+    --warning: #a04020;
+    --info: #5a48a0;
+    --mono: 'IBM Plex Mono', monospace;
+    --serif: 'Noto Serif Hebrew', serif;
+    --sans: 'DM Sans', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; display: flex; flex-direction: column; }
+
+  /* ── Header ── */
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 16px 28px;
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--surface);
+    position: sticky; top: 0; z-index: 100;
+  }
+  .logo { display: flex; align-items: center; gap: 12px; }
+  .logo-icon { width: 30px; height: 30px; background: var(--accent); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 15px; }
+  .logo-text { font-family: var(--mono); font-size: 13px; }
+  .logo-sub { font-size: 10px; color: var(--text-muted); font-family: var(--mono); }
+  .header-right { display: flex; align-items: center; gap: 10px; }
+  .version-badge { font-family: var(--mono); font-size: 10px; padding: 2px 7px; border-radius: 3px; border: 1px solid var(--border); color: var(--text-muted); }
+  .jurisdiction-pill { font-family: var(--mono); font-size: 11px; padding: 4px 10px; border-radius: 20px; border: 1px solid var(--accent); color: var(--accent); }
+
+  /* ── Layout ── */
+  main { flex: 1; display: grid; grid-template-columns: 300px 1fr; height: calc(100vh - 61px); overflow: hidden; }
+
+  /* ── Sidebar ── */
+  .sidebar { border-left: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; overflow-y: auto; }
+  .sidebar-section { border-bottom: 1px solid var(--border); padding: 16px; }
+  .sidebar-label { font-family: var(--mono); font-size: 9px; letter-spacing: 0.12em; color: var(--text-muted); text-transform: uppercase; margin-bottom: 10px; }
+
+  /* ── Upload zones ── */
+  .upload-zone { border: 1px dashed var(--border); border-radius: 7px; padding: 11px 13px; cursor: pointer; transition: all 0.2s; margin-bottom: 7px; position: relative; }
+  .upload-zone:hover { border-color: var(--accent); background: rgba(200,169,110,0.03); }
+  .upload-zone.has-file { border-color: var(--success); border-style: solid; background: rgba(110,200,154,0.03); }
+  .upload-zone.required { border-color: rgba(200,169,110,0.25); }
+  .upload-header { display: flex; align-items: center; gap: 9px; margin-bottom: 3px; }
+  .upload-icon { font-size: 14px; }
+  .upload-title { font-size: 12px; font-weight: 500; }
+  .upload-desc { font-size: 11px; color: var(--text-muted); margin-right: 23px; }
+  .upload-status { font-size: 10px; font-family: var(--mono); margin-top: 5px; margin-right: 23px; color: var(--success); display: none; }
+  .upload-zone.has-file .upload-status { display: block; }
+  .upload-zone input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
+  /* ── URL input ── */
+  .url-row { display: flex; gap: 6px; margin-bottom: 7px; }
+  .url-input { flex: 1; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; color: var(--text); font-size: 11px; font-family: var(--mono); outline: none; direction: ltr; }
+  .url-input:focus { border-color: var(--accent2); }
+  .url-input::placeholder { color: var(--text-muted); }
+  .url-add { background: var(--surface3); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; color: var(--accent2); cursor: pointer; font-size: 14px; }
+  .url-add:hover { border-color: var(--accent2); }
+  .url-item { display: flex; align-items: center; justify-content: space-between; background: var(--surface2); border-radius: 4px; padding: 5px 8px; font-size: 10px; font-family: var(--mono); color: var(--accent2); direction: ltr; margin-bottom: 4px; }
+  .url-item button { background: none; border: none; color: var(--text-muted); cursor: pointer; }
+
+  /* ── Jurisdiction ── */
+  .juris-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+  .juris-btn { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 7px; cursor: pointer; transition: all 0.2s; text-align: center; }
+  .juris-btn:hover { border-color: var(--accent); }
+  .juris-btn.selected { border-color: var(--accent); background: rgba(200,169,110,0.07); }
+  .juris-code { font-family: var(--mono); font-size: 13px; font-weight: 500; color: var(--accent); display: block; }
+  .juris-name { font-size: 9px; color: var(--text-muted); display: block; margin-top: 2px; }
+
+  /* ── Analyze button ── */
+  .analyze-btn { margin: 14px; width: calc(100% - 28px); background: var(--accent); color: var(--bg); border: none; border-radius: 8px; padding: 13px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: var(--sans); transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .analyze-btn:hover:not(:disabled) { background: #d4b87a; }
+  .analyze-btn:disabled { background: var(--border); color: var(--text-muted); cursor: not-allowed; }
+
+  /* ── Content ── */
+  .content { display: flex; flex-direction: column; overflow: hidden; }
+  .tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--surface); padding: 0 24px; }
+  .tab { padding: 13px 18px; font-size: 12px; font-family: var(--mono); color: var(--text-muted); cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.2s; white-space: nowrap; }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .output-area { flex: 1; overflow-y: auto; padding: 24px 28px; }
+
+  /* ── States ── */
+  .welcome { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 14px; color: var(--text-muted); }
+  .welcome-icon { font-size: 44px; opacity: 0.25; }
+  .welcome h2 { font-family: var(--serif); font-size: 20px; color: var(--text); font-weight: 300; }
+  .welcome p { font-size: 13px; max-width: 360px; line-height: 1.6; }
+  .flow-steps { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; margin-top: 6px; }
+  .flow-step { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; font-size: 11px; font-family: var(--mono); display: flex; align-items: center; gap: 7px; }
+  .flow-num { width: 18px; height: 18px; background: var(--accent); color: var(--bg); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; flex-shrink: 0; }
+  .flow-arrow { color: var(--text-muted); font-size: 10px; }
+
+  /* ── Loading ── */
+  .loading { display: none; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 18px; }
+  .loading.active { display: flex; }
+  .spinner { width: 36px; height: 36px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-label { font-family: var(--mono); font-size: 11px; color: var(--text-muted); }
+  .loading-steps-list { display: flex; flex-direction: column; gap: 7px; width: 280px; }
+  .lstep { display: flex; align-items: center; gap: 9px; font-size: 12px; color: var(--text-muted); transition: color 0.3s; }
+  .lstep.active { color: var(--accent); }
+  .lstep.done { color: var(--success); }
+  .ldot { width: 5px; height: 5px; border-radius: 50%; background: var(--border); flex-shrink: 0; transition: background 0.3s; }
+  .lstep.active .ldot { background: var(--accent); animation: pulse 1s infinite; }
+  .lstep.done .ldot { background: var(--success); }
+  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.3} }
+
+  /* ── Domain confirmation modal ── */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 200; display: none; align-items: center; justify-content: center; }
+  .modal-overlay.active { display: flex; }
+  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; width: 480px; max-width: 90vw; overflow: hidden; }
+  .modal-header { padding: 18px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+  .modal-icon { font-size: 20px; }
+  .modal-title { font-family: var(--serif); font-size: 17px; font-weight: 400; }
+  .modal-body { padding: 20px; }
+  .domain-detected { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 16px; }
+  .domain-detected-label { font-family: var(--mono); font-size: 9px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 8px; }
+  .domain-main { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+  .domain-icon { font-size: 22px; }
+  .domain-name { font-size: 16px; font-weight: 600; color: var(--accent); }
+  .domain-ipc { font-family: var(--mono); font-size: 11px; color: var(--text-muted); }
+  .domain-confidence { font-size: 11px; color: var(--text-muted); }
+  .domain-keywords { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+  .kw-tag { font-family: var(--mono); font-size: 10px; padding: 2px 7px; background: var(--surface3); border: 1px solid var(--border); border-radius: 3px; color: var(--text-muted); }
+  .modal-label { font-size: 12px; color: var(--text-muted); margin-bottom: 8px; }
+  .domain-input-row { display: flex; gap: 8px; }
+  .domain-text-input { flex: 1; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 9px 12px; color: var(--text); font-size: 13px; outline: none; }
+  .domain-text-input:focus { border-color: var(--accent); }
+  .modal-footer { padding: 14px 20px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; }
+  .btn-secondary { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 9px 16px; color: var(--text-muted); font-size: 12px; cursor: pointer; font-family: var(--sans); }
+  .btn-primary { background: var(--accent); border: none; border-radius: 6px; padding: 9px 20px; color: var(--bg); font-size: 12px; font-weight: 600; cursor: pointer; font-family: var(--sans); }
+  .btn-primary:hover { background: #d4b87a; }
+
+  /* ── Expert badge ── */
+  .expert-badge { display: inline-flex; align-items: center; gap: 6px; background: rgba(155,142,200,0.1); border: 1px solid rgba(155,142,200,0.25); border-radius: 20px; padding: 4px 12px; font-size: 11px; color: var(--info); font-family: var(--mono); margin-bottom: 16px; }
+
+  /* ── Analysis cards ── */
+  .section { margin-bottom: 26px; }
+  .section-hd { display: flex; align-items: center; gap: 9px; margin-bottom: 12px; padding-bottom: 9px; border-bottom: 1px solid var(--border); }
+  .stag { font-family: var(--mono); font-size: 10px; padding: 2px 7px; border-radius: 3px; }
+  .stag-gold { background: rgba(200,169,110,0.1); color: var(--accent); border: 1px solid rgba(200,169,110,0.2); }
+  .stag-blue { background: rgba(110,159,200,0.1); color: var(--accent2); border: 1px solid rgba(110,159,200,0.2); }
+  .stag-green { background: rgba(110,200,154,0.1); color: var(--success); border: 1px solid rgba(110,200,154,0.2); }
+  .stag-purple { background: rgba(155,142,200,0.1); color: var(--info); border: 1px solid rgba(155,142,200,0.2); }
+  .section-title { font-family: var(--serif); font-size: 15px; font-weight: 400; }
+  .card { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 15px 17px; margin-bottom: 9px; font-size: 13px; line-height: 1.75; direction: rtl; }
+  .card h4 { font-size: 10px; font-family: var(--mono); color: var(--text-muted); margin-bottom: 7px; text-transform: uppercase; letter-spacing: 0.08em; }
+  .strength-row { display: flex; align-items: flex-start; gap: 9px; padding: 7px 0; border-bottom: 1px solid var(--border); }
+  .strength-row:last-child { border: none; }
+  .snum { font-family: var(--mono); font-size: 11px; color: var(--accent); flex-shrink: 0; margin-top: 2px; }
+
+  /* ── Response box ── */
+  .resp-box { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .resp-toolbar { display: flex; align-items: center; justify-content: space-between; padding: 9px 14px; border-bottom: 1px solid var(--border); background: var(--surface2); }
+  .resp-toolbar-label { font-family: var(--mono); font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; }
+  .copy-btn { background: none; border: 1px solid var(--border); border-radius: 4px; padding: 3px 9px; color: var(--text-muted); font-size: 11px; cursor: pointer; font-family: var(--mono); transition: all 0.2s; direction: ltr; }
+  .copy-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .resp-content { padding: 18px; font-size: 13px; line-height: 1.85; direction: ltr; white-space: pre-wrap; color: var(--text); max-height: 600px; overflow-y: auto; }
+
+  /* ── Claims diff ── */
+  .claim-diff { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-bottom: 10px; }
+  .claim-hd { padding: 9px 14px; background: var(--surface); border-bottom: 1px solid var(--border); font-family: var(--mono); font-size: 11px; display: flex; align-items: center; justify-content: space-between; direction: ltr; }
+  .claim-num { color: var(--accent); }
+  .claim-type { font-size: 10px; padding: 2px 6px; border-radius: 3px; }
+  .amended { background: rgba(200,169,110,0.1); color: var(--accent); }
+  .unchanged { background: rgba(122,120,112,0.1); color: var(--text-muted); }
+  .claim-body { padding: 13px; font-size: 12px; line-height: 1.7; direction: ltr; }
+  .del { background: rgba(200,80,80,0.15); color: #e88; text-decoration: line-through; border-radius: 2px; padding: 0 2px; }
+  .ins { background: rgba(110,200,154,0.15); color: var(--success); border-radius: 2px; padding: 0 2px; }
+  .claim-support { margin-top: 8px; font-size: 11px; font-family: var(--mono); color: var(--text-muted); }
+  .claim-rationale { margin-top: 5px; font-size: 12px; color: var(--text-muted); direction: rtl; }
+
+  /* ── Strategy ── */
+  .strategy-box { background: rgba(200,169,110,0.04); border: 1px solid rgba(200,169,110,0.18); border-radius: 8px; padding: 15px 17px; }
+  .strategy-title { font-family: var(--mono); font-size: 10px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 9px; }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<!-- Domain confirmation modal -->
+<div class="modal-overlay" id="domain-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-icon">🔬</span>
+      <span class="modal-title">זיהוי תחום טכנולוגי</span>
+    </div>
+    <div class="modal-body">
+      <div class="domain-detected">
+        <div class="domain-detected-label">זוהה אוטומטית מתוך הבקשה</div>
+        <div class="domain-main">
+          <span class="domain-icon" id="d-icon">⚙️</span>
+          <div>
+            <div class="domain-name" id="d-name">—</div>
+            <div class="domain-ipc" id="d-ipc">—</div>
+          </div>
+        </div>
+        <div class="domain-confidence" id="d-conf"></div>
+        <div class="domain-keywords" id="d-keywords"></div>
+      </div>
+      <div class="modal-label">תיקון ידני (אופציונלי) — תאר את התחום בצורה מדויקת יותר:</div>
+      <div class="domain-input-row">
+        <input class="domain-text-input" id="domain-override" placeholder="למשל: הדפסה אינקג׳ט, מכשירים רפואי-אלקטרוניים...">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="cancelAnalysis()">ביטול</button>
+      <button class="btn-primary" onclick="confirmDomain()">אשר והמשך לניתוח ⚡</button>
+    </div>
+  </div>
+</div>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">⚖</div>
+    <div>
+      <div class="logo-text">Patent OA Analyzer</div>
+      <div class="logo-sub">Office Action Response Platform · v2</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <span class="version-badge">v2 · Skill + Expert</span>
+    <span class="jurisdiction-pill" id="header-juris">EP</span>
+  </div>
+</header>
+
+<main>
+  <div class="content">
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('analysis')">ניתוח דו"ח הבחינה</div>
+      <div class="tab" onclick="switchTab('response')">טיוטת תשובה</div>
+      <div class="tab" onclick="switchTab('claims')">תיקוני תביעות</div>
+    </div>
+
+    <div class="output-area" id="output-area">
+
+      <div class="welcome" id="welcome-state">
+        <div class="welcome-icon">📋</div>
+        <h2>מוכן לנתח את דו"ח הבחינה שלך</h2>
+        <p>העלי את החומרים ← הפלטפורמה תזהה את תחום הבקשה ← תאשרי ← ניתוח מלא</p>
+        <div class="flow-steps">
+          <div class="flow-step"><div class="flow-num">1</div>העלאת חומרים</div>
+          <span class="flow-arrow">←</span>
+          <div class="flow-step"><div class="flow-num">2</div>זיהוי תחום</div>
+          <span class="flow-arrow">←</span>
+          <div class="flow-step"><div class="flow-num">3</div>אישורך</div>
+          <span class="flow-arrow">←</span>
+          <div class="flow-step"><div class="flow-num">4</div>ניתוח מלא</div>
+        </div>
+      </div>
+
+      <div class="loading" id="loading-state">
+        <div class="spinner"></div>
+        <div class="loading-label" id="loading-label">מכין...</div>
+        <div class="loading-steps-list" id="loading-steps-list"></div>
+      </div>
+
+      <div id="analysis-panel" style="display:none"></div>
+      <div id="response-panel" style="display:none"></div>
+      <div id="claims-panel" style="display:none"></div>
+    </div>
+  </div>
+
+  <div class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">רשות / Jurisdiction</div>
+      <div class="juris-grid">
+        <div class="juris-btn selected" onclick="selectJuris(this,'EP')"><span class="juris-code">EP</span><span class="juris-name">EPO · Problem-Solution</span></div>
+        <div class="juris-btn" onclick="selectJuris(this,'US')"><span class="juris-code">US</span><span class="juris-name">USPTO · §102/103</span></div>
+        <div class="juris-btn" onclick="selectJuris(this,'CN')"><span class="juris-code">CN</span><span class="juris-name">CNIPA · Art. 22</span></div>
+        <div class="juris-btn" onclick="selectJuris(this,'JP')"><span class="juris-code">JP</span><span class="juris-name">JPO · Art. 29</span></div>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">חומרים נדרשים</div>
+      <div class="upload-zone required" id="zone-oa">
+        <input type="file" accept=".pdf" onchange="handleUpload(this,'zone-oa','oa-status')">
+        <div class="upload-header"><span class="upload-icon">📄</span><span class="upload-title">דו"ח בחינה (Office Action)</span></div>
+        <div class="upload-desc">PDF · חובה</div>
+        <div class="upload-status" id="oa-status"></div>
+      </div>
+      <div class="upload-zone" id="zone-prev-oa">
+        <input type="file" accept=".pdf" multiple onchange="handleUpload(this,'zone-prev-oa','prev-oa-status')">
+        <div class="upload-header"><span class="upload-icon">📂</span><span class="upload-title">דו"חות בחינה קודמים</span></div>
+        <div class="upload-desc">PDF · מרובים · אופציונלי</div>
+        <div class="upload-status" id="prev-oa-status"></div>
+      </div>
+      <div class="upload-zone required" id="zone-app">
+        <input type="file" accept=".pdf" onchange="handleUpload(this,'zone-app','app-status')">
+        <div class="upload-header"><span class="upload-icon">📑</span><span class="upload-title">בקשת הפטנט (Spec + Claims)</span></div>
+        <div class="upload-desc">PDF · חובה</div>
+        <div class="upload-status" id="app-status"></div>
+      </div>
+      <div class="upload-zone" id="zone-pending">
+        <input type="file" accept=".pdf" onchange="handleUpload(this,'zone-pending','pending-status')">
+        <div class="upload-header"><span class="upload-icon">📝</span><span class="upload-title">Pending Claims</span></div>
+        <div class="upload-desc">PDF · אופציונלי (אם שונות מהבקשה המקורית)</div>
+        <div class="upload-status" id="pending-status"></div>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Prior Art</div>
+      <div class="upload-zone" id="zone-pa">
+        <input type="file" accept=".pdf" multiple onchange="handleUpload(this,'zone-pa','pa-status')">
+        <div class="upload-header"><span class="upload-icon">🔍</span><span class="upload-title">Prior Art References</span></div>
+        <div class="upload-desc">PDF · מרובים · אופציונלי</div>
+        <div class="upload-status" id="pa-status"></div>
+      </div>
+      <div class="url-row">
+        <input class="url-input" id="url-input" type="url" placeholder="https://patents.google.com/..." dir="ltr">
+        <button class="url-add" onclick="addUrl()">+</button>
+      </div>
+      <div id="url-list"></div>
+    </div>
+
+    <button class="analyze-btn" id="analyze-btn" onclick="startAnalysis()">
+      ⚡ נתח דו"ח בחינה
+    </button>
+  </div>
+</main>
+
+<script>
+// ── State ──
+let jurisdiction = 'EP';
+let uploadedFiles = {};
+let patentUrls = [];
+let detectedDomain = null;
+let confirmedDomain = null;
+let analysisResult = null;
+let currentTab = 'analysis';
+
+// ── The full embedded skill ──
+const PATENT_SKILL = `
+# Patent Examiner Skill — Full Instructions
+
+## Core Principles
+- Stay focused ONLY on what the Examiner actually argued. Do NOT add issues not raised.
+- Analyze the prior art as it is written, not as the Examiner describes it.
+- Identify when the Examiner misreads the reference OR misunderstands the claimed invention — these are the strongest arguments.
+- Check each disputed claim element separately — do not summarize elements together.
+- Surface technical nuances the Examiner may have missed.
+
+## What NOT to do
+- Do not raise new arguments the Examiner did not make.
+- Do not draft a response to objections that do not exist in the OA.
+- Do not assume what the Examiner "probably meant" — stick to the text.
+- Do not repeat the entire claim in analysis — focus only on disputed elements.
+
+## Workflow
+
+### Step 1: Identify rejection type
+Read the OA and identify: type (Novelty / Inventive Step / Clarity / other), which claims, which references cited for which elements, and whether there is a combination (§103/Art.56) and how the Examiner constructs it.
+
+### Step 2: Analyze Prior Art vs. Claim
+For each element the Examiner cites:
+- What does the Examiner CLAIM the reference discloses?
+- What does the reference ACTUALLY disclose (literally or necessarily)?
+- Is there a GAP between what is claimed and what is written?
+- The NUANCE — does the Examiner over-interpret, expand terminology, or miss a technical distinction?
+
+### Step 3: Priority of attack
+1. Examiner error in reading the reference — the element simply isn't there
+2. Examiner error in reading the claim — misinterpretation of claim language
+3. Technical distinction the Examiner missed — the thing in the reference differs from the thing in the claim
+4. Inventive step argument — even if elements exist separately, no reason to combine
+
+## Jurisdiction-Specific Rules
+
+### EP (EPO)
+- Novelty (Art. 54): Element must be "directly and unambiguously" disclosed. Attack "implicit" disclosures — they must be "necessarily" present, not merely possible. Cite T 1989/14.
+- Inventive Step (Art. 56): MANDATORY Problem-Solution Approach (PSA): (1) identify closest prior art, (2) determine objective technical problem, (3) would skilled person arrive at invention with reasonable expectation of success?
+- Art. 84 Clarity: Address exactly what Examiner cited — do not expand.
+- Art. 123(2): Every claim amendment must have literal basis in the original application as filed.
+- Tone: "we believe" / "we consider" / "we submit". NOT "Applicant submits".
+- Key case law: T 0002/83 (PSA), T 0641/00 (COMVIK), T 1989/14 (implicit disclosure), T 0190/99 (closest prior art).
+
+### US (USPTO)
+- §102: All elements must be in a single reference (Anticipation). Check if Examiner improperly combined under §102.
+- §103: Obviousness — (1) motivation to combine? (2) did Examiner articulate it? (3) KSR vs TSM. Apply Graham v. John Deere factors.
+- §112: Identify exact sub-section — written description, enablement, or definiteness.
+- Tone: More direct. "we respectfully disagree" / "the Examiner errs in asserting".
+- Useful: Propose interview with Examiner when technical misunderstanding is clear.
+- Key case law: Graham v. John Deere (1966), KSR Int'l v. Teleflex (2007), Ariad v. Eli Lilly (2010).
+
+### CN (CNIPA)
+- Art. 22 / 22(3): Novelty and inventive step — similar to EPO.
+- Art. 26.4 (Clarity): Very frequently cited by CN examiners, often broadly — argue specific claim language IS supported.
+- Three-step inventive step method: (1) closest prior art, (2) distinguishing features + technical effect, (3) would skilled person arrive at it.
+- Note: Translations may lose nuance — emphasize original technical meaning.
+- Tone: Very formal.
+
+### JP (JPO)
+- Art. 29(1)/(2): Novelty and inventive step — "easily arrived at" standard.
+- Read each point of Reasons for Rejection individually — JPO examiners are very detailed.
+- Interview (面接審査): Strongly recommended when there is technical misunderstanding.
+- Tone: Extremely respectful and formal.
+
+## Response Style Guidelines
+- Lead with primary structural argument, clearly labeled.
+- Secondary arguments labeled as such: "As a further argument...".
+- Tone: professional but not stiff — "we believe", "we consider", not "Applicant submits".
+- State the technical distinguishing feature clearly and early.
+- Reference specific column/line/page of the prior art document when arguing it does NOT disclose something.
+- For unexpected technical effects: quantify if possible (e.g., "3-fold improvement in spring constant").
+
+## Red Flags — When to pause and flag
+- Examiner cites a passage that is unclear from the reference → flag for user to verify
+- Claim amendment considered → verify Art. 123(2) / new matter before drafting
+- This is a 2nd OA (Final / Further Examination) → strategy differs, note this explicitly
+- User considering Appeal → outside scope of this analysis, recommend separate consultation
+`;
+
+// ── Domain expert knowledge base ──
+const DOMAIN_EXPERTS = {
+  mechanical: {
+    icon: '⚙️', label: 'מכנית / Mechanical',
+    instructions: `MECHANICAL ENGINEERING DOMAIN CONTEXT:
+- Pay attention to: structural configurations, material properties (elastic modulus, tensile strength, compressibility), force/stress/strain relationships, kinematic mechanisms.
+- Common claim terms: "configured to", "operably connected", "compressive/tensile force", "elastic modulus", structural layer descriptions.
+- In prior art comparison: exact structural arrangements matter — "sandwiched between" vs "impregnated within" are structurally distinct.
+- Unexpected technical effects: rigidity improvements, fatigue resistance, dimensional stability are highly relevant.`
+  },
+  printing: {
+    icon: '🖨️', label: 'הדפסה / Printing Technology',
+    instructions: `PRINTING TECHNOLOGY DOMAIN CONTEXT:
+- Key technologies: inkjet, offset, digital, flexographic, gravure printing; intermediate transfer members (ITM), blankets, printing plates.
+- Critical distinctions: ink transfer mechanisms, substrate interactions, blanket/ITM layer structures and materials (silicone, rubber, fabric mesh).
+- IPC classes: B41 (printing), B41F (machines), B41N (printing plates/cylinders/blankets).
+- Common prior art patterns: Landa Corp patents (digital offset printing), traditional offset blanket patents.
+- Material science aspects: PDMS, elastomers, woven fabrics, impregnation vs. lamination are technically distinct.`
+  },
+  biomedical: {
+    icon: '🧬', label: 'ביו-רפואי / Biomedical',
+    instructions: `BIOMEDICAL / MEDICAL DEVICE DOMAIN CONTEXT:
+- Regulatory context: FDA 510(k), CE marking considerations may affect claim scope strategy.
+- Key distinctions: in vivo vs in vitro, invasive vs non-invasive, diagnostic vs therapeutic.
+- Claim interpretation: functional claims ("configured to treat/diagnose") require careful prior art mapping.
+- IPC classes: A61 (medical/veterinary), G01N (measurement/testing).
+- Unexpected effects: clinical outcomes, safety profiles, biocompatibility are strong secondary arguments.`
+  },
+  software: {
+    icon: '💻', label: 'תוכנה / Software',
+    instructions: `SOFTWARE / COMPUTER-IMPLEMENTED INVENTION DOMAIN CONTEXT:
+- EP: Must have "technical character" — focus on technical problem and technical solution.
+- US: §101 eligibility may be an issue — ensure claims are directed to specific improvements in computer functionality.
+- Key distinctions: algorithm per se vs. implementation achieving specific technical result.
+- Claim language: "processor configured to", "non-transitory computer-readable medium", specific technical effects.
+- IPC classes: G06 (computing), H04 (communications).`
+  },
+  chemistry: {
+    icon: '⚗️', label: 'כימיה / Chemistry',
+    instructions: `CHEMISTRY / MATERIALS DOMAIN CONTEXT:
+- Structural vs. functional claims: structural claims are stronger for novelty; functional may face enablement issues.
+- Prior art: exact chemical formulas, ranges, and concentrations matter — overlapping ranges require careful analysis.
+- Unexpected technical effects: particularly important for inventive step in chemistry — quantitative data is key.
+- IPC classes: C07 (organic chemistry), C08 (polymers), C09 (dyes, paints, adhesives).
+- EP: "technical effect across the whole scope" requirement for broad claims.`
+  },
+  electronics: {
+    icon: '🔌', label: 'אלקטרוניקה / Electronics',
+    instructions: `ELECTRONICS / ELECTRICAL ENGINEERING DOMAIN CONTEXT:
+- Circuit configurations: specific connections, signal flow, timing relationships matter.
+- Claim terms: "electrically connected", "operably coupled", "configured to receive/transmit".
+- Prior art: schematic differences, functional block differences, specific component values.
+- IPC classes: H01 (basic electric elements), H02 (power generation), H03 (electronic circuits), H04 (communications).
+- Software-implemented electronics: ensure technical character is clear.`
+  },
+  general: {
+    icon: '📋', label: 'כללי / General',
+    instructions: `GENERAL PATENT PROSECUTION CONTEXT:
+- Apply standard examination principles without domain-specific assumptions.
+- Focus on exact claim language vs. exact prior art disclosure.`
+  }
+};
+
+// ── UI helpers ──
+function selectJuris(el, code) {
+  document.querySelectorAll('.juris-btn').forEach(b => b.classList.remove('selected'));
+  el.classList.add('selected');
+  jurisdiction = code;
+  document.getElementById('header-juris').textContent = code;
+}
+
+function handleUpload(input, zoneId, statusId) {
+  const zone = document.getElementById(zoneId);
+  const status = document.getElementById(statusId);
+  const files = Array.from(input.files);
+  if (!files.length) return;
+  zone.classList.add('has-file');
+  uploadedFiles[zoneId] = files;
+  status.textContent = '✓ ' + (files.length > 1 ? `${files.length} קבצים` : files[0].name);
+}
+
+function addUrl() {
+  const input = document.getElementById('url-input');
+  const val = input.value.trim();
+  if (!val || !val.startsWith('http')) return;
+  patentUrls.push(val);
+  renderUrls();
+  input.value = '';
+}
+
+document.getElementById('url-input').addEventListener('keydown', e => { if (e.key === 'Enter') addUrl(); });
+
+function renderUrls() {
+  const list = document.getElementById('url-list');
+  list.innerHTML = patentUrls.map((url, i) => {
+    const short = url.replace('https://patents.google.com/patent/','').split('/')[0];
+    return `<div class="url-item"><span>${short}</span><button onclick="removeUrl(${i})">×</button></div>`;
+  }).join('');
+}
+
+function removeUrl(i) { patentUrls.splice(i,1); renderUrls(); }
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab').forEach((t,i) => {
+    t.classList.toggle('active', ['analysis','response','claims'][i] === tab);
+  });
+  if (analysisResult) {
+    ['analysis','response','claims'].forEach(t => {
+      document.getElementById(t+'-panel').style.display = t === tab ? 'block' : 'none';
+    });
+  }
+}
+
+// ── Step 1: Start — validate & kick off domain detection ──
+async function startAnalysis() {
+  if (!uploadedFiles['zone-oa'] || !uploadedFiles['zone-app']) {
+    alert('נא להעלות לפחות את דו"ח הבחינה ואת בקשת הפטנט');
+    return;
+  }
+  document.getElementById('analyze-btn').disabled = true;
+  showLoading('מזהה תחום טכנולוגי...', ['קורא את בקשת הפטנט...', 'מנתח IPC class ומילות מפתח...', 'מכין זיהוי תחום...']);
+
+  try {
+    const appFile = uploadedFiles['zone-app'][0];
+    const appB64 = await toBase64(appFile);
+
+    const resp = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 500,
+        system: `You are a patent classification expert. Read the patent application and identify the technical domain.
+Return ONLY a JSON object with NO markdown:
+{"domain":"one of: mechanical|printing|biomedical|software|chemistry|electronics|general","ipc":"IPC class code e.g. B41N","confidence":"high|medium|low","keywords":["key1","key2","key3"],"description":"1 short sentence in Hebrew describing the technology"}`,
+        messages: [{
+          role: "user",
+          content: [
+            { type: "document", source: { type: "base64", media_type: "application/pdf", data: appB64 }, title: "Patent Application" },
+            { type: "text", text: "Identify the technical domain of this patent application. Return only JSON." }
+          ]
+        }]
+      })
+    });
+
+    const data = await resp.json();
+    const text = data.content.map(c => c.text||'').join('');
+    const clean = text.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
+    detectedDomain = JSON.parse(clean);
+    showDomainModal(detectedDomain);
+
+  } catch(err) {
+    console.error(err);
+    // Fallback — go straight to analysis with general domain
+    detectedDomain = { domain: 'general', ipc: '—', confidence: 'low', keywords: [], description: 'לא זוהה תחום אוטומטית' };
+    showDomainModal(detectedDomain);
+  }
+}
+
+// ── Step 2: Show domain modal ──
+function showDomainModal(d) {
+  hideLoading();
+  const expert = DOMAIN_EXPERTS[d.domain] || DOMAIN_EXPERTS.general;
+  document.getElementById('d-icon').textContent = expert.icon;
+  document.getElementById('d-name').textContent = expert.label;
+  document.getElementById('d-ipc').textContent = d.ipc ? `IPC: ${d.ipc}` : '';
+  document.getElementById('d-conf').textContent = d.description || '';
+  document.getElementById('d-keywords').innerHTML = (d.keywords||[]).map(k => `<span class="kw-tag">${k}</span>`).join('');
+  document.getElementById('domain-override').value = '';
+  document.getElementById('domain-modal').classList.add('active');
+}
+
+function cancelAnalysis() {
+  document.getElementById('domain-modal').classList.remove('active');
+  document.getElementById('analyze-btn').disabled = false;
+}
+
+// ── Step 3: Confirm domain → run full analysis ──
+async function confirmDomain() {
+  document.getElementById('domain-modal').classList.remove('active');
+  const override = document.getElementById('domain-override').value.trim();
+  confirmedDomain = override || detectedDomain;
+
+  const domainKey = typeof confirmedDomain === 'object' ? confirmedDomain.domain : 'general';
+  const expert = DOMAIN_EXPERTS[domainKey] || DOMAIN_EXPERTS.general;
+  const domainDescription = override || (typeof confirmedDomain === 'object' ? confirmedDomain.description : confirmedDomain);
+
+  showLoading('מנתח את דו"ח הבחינה...', [
+    'קורא את דו"ח הבחינה...',
+    'מנתח ה-prior art אל מול התביעות...',
+    'בודק כל אלמנט claim-by-claim...',
+    'מזמן מומחה תחום...',
+    'מכין טיוטת תשובה...',
+    'מציע תיקוני תביעות...'
+  ]);
+
+  try {
+    // Build documents
+    const oaFile = uploadedFiles['zone-oa'][0];
+    const appFile = uploadedFiles['zone-app'][0];
+    const prevOaFiles = uploadedFiles['zone-prev-oa'] || [];
+    const pendingFile = uploadedFiles['zone-pending'] ? uploadedFiles['zone-pending'][0] : null;
+    const paFiles = uploadedFiles['zone-pa'] || [];
+    const allFiles = [oaFile, appFile, ...prevOaFiles, ...(pendingFile ? [pendingFile] : []), ...paFiles];
+    const allB64s = await Promise.all(allFiles.map(toBase64));
+    const oaB64 = allB64s[0];
+    const appB64 = allB64s[1];
+    const prevOaB64s = allB64s.slice(2, 2 + prevOaFiles.length);
+    const pendingB64 = pendingFile ? allB64s[2 + prevOaFiles.length] : null;
+    const paB64s = allB64s.slice(2 + prevOaFiles.length + (pendingFile ? 1 : 0));
+
+    const contentBlocks = [
+      { type: "document", source: { type: "base64", media_type: "application/pdf", data: oaB64 }, title: "Office Action (Current)" },
+      { type: "document", source: { type: "base64", media_type: "application/pdf", data: appB64 }, title: "Patent Application (Spec + Claims)" },
+      ...prevOaB64s.map((b,i) => ({ type: "document", source: { type: "base64", media_type: "application/pdf", data: b }, title: `Previous Office Action ${i+1}` })),
+      ...(pendingB64 ? [{ type: "document", source: { type: "base64", media_type: "application/pdf", data: pendingB64 }, title: "Pending Claims (current amended claims)" }] : []),
+      ...paB64s.map((b,i) => ({ type: "document", source: { type: "base64", media_type: "application/pdf", data: b }, title: `Prior Art Reference ${i+1}` }))
+    ];
+
+    if (patentUrls.length) {
+      contentBlocks.push({ type: "text", text: `Additional prior art URLs (Google Patents):\n${patentUrls.join('\n')}` });
+    }
+
+    contentBlocks.push({ type: "text", text: buildAnalysisPrompt(jurisdiction, domainDescription) });
+
+    const systemPrompt = buildSystemPrompt(jurisdiction, expert.instructions);
+
+    const resp = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 8000,
+        system: systemPrompt,
+        messages: [{ role: "user", content: contentBlocks }]
+      })
+    });
+
+    const data = await resp.json();
+    const text = data.content.map(c => c.text||'').join('');
+    analysisResult = parseOutput(text);
+    renderAll();
+
+  } catch(err) {
+    console.error(err);
+    hideLoading();
+    document.getElementById('welcome-state').style.display = 'flex';
+    document.getElementById('welcome-state').innerHTML = `<div style="color:var(--warning);font-size:32px">⚠</div><h2 style="color:var(--warning)">שגיאה</h2><p>${err.message}</p>`;
+    document.getElementById('analyze-btn').disabled = false;
+  }
+}
+
+function buildSystemPrompt(juris, domainInstructions) {
+  return `You are an expert patent attorney assistant. You have full knowledge of patent prosecution in ${juris}.
+
+${PATENT_SKILL}
+
+---
+${domainInstructions}
+---
+
+RESPONSE STYLE (learned from user's own responses):
+- Tone: "we believe" / "we consider" — professional but not stiff. NOT "Applicant submits".
+- Structure: Lead with a brief general explanation of the invention → then address each OA section.
+- Primary argument first, clearly labeled. Secondary arguments labeled "As a further argument...".
+- Reference specific column/line/page when arguing the prior art does NOT disclose something.
+- For claim amendments: provide a table with claim number, amendment, and support (page + lines).
+- Internal notes for the attorney in [square brackets] if flagging something uncertain.
+
+OUTPUT: Return a single JSON object (no markdown fences):
+{
+  "summary": "2-3 sentence Hebrew summary of the OA",
+  "domain_used": "domain name for display",
+  "rejections": [
+    {
+      "type": "e.g. Art. 54 EPC / Novelty",
+      "claims": "1, 11",
+      "reference": "D1",
+      "examiner_argument": "Hebrew — what the Examiner argued",
+      "examiner_error": "Hebrew — specific error or misreading identified (null if none)",
+      "our_analysis": "Hebrew — detailed element-by-element analysis",
+      "strengths": ["Hebrew strength 1", "Hebrew strength 2"],
+      "weaknesses": ["Hebrew weakness if any"]
+    }
+  ],
+  "strategy": "Hebrew strategic recommendation with reasoning",
+  "response_draft": "Full English response draft in the user's style",
+  "claim_amendments": [
+    {
+      "claim_number": "1",
+      "original": "original claim text",
+      "amended": "amended claim text",
+      "support": "page X lines Y-Z",
+      "rationale": "Hebrew rationale"
+    }
+  ]
+}`;
+}
+
+function buildAnalysisPrompt(juris, domainDesc) {
+  return `Please analyze the attached Office Action against the patent application.
+
+Jurisdiction: ${juris}
+Technical domain: ${domainDesc}
+
+Apply the full Patent Examiner Skill instructions and domain expert knowledge.
+Focus ONLY on what the Examiner actually argued.
+Identify any misreadings of the prior art or the invention.
+Return the complete analysis as a JSON object.`;
+}
+
+// ── Loading UI ──
+function showLoading(label, steps) {
+  document.getElementById('welcome-state').style.display = 'none';
+  ['analysis','response','claims'].forEach(t => document.getElementById(t+'-panel').style.display = 'none');
+  const ls = document.getElementById('loading-state');
+  ls.classList.add('active');
+  document.getElementById('loading-label').textContent = label;
+  const list = document.getElementById('loading-steps-list');
+  list.innerHTML = steps.map((s,i) => `<div class="lstep ${i===0?'active':''}" id="ls${i}"><div class="ldot"></div>${s}</div>`).join('');
+  let idx = 1;
+  const interval = setInterval(() => {
+    if (idx >= steps.length) { clearInterval(interval); return; }
+    const prev = document.getElementById(`ls${idx-1}`);
+    if (prev) { prev.classList.remove('active'); prev.classList.add('done'); }
+    const cur = document.getElementById(`ls${idx}`);
+    if (cur) cur.classList.add('active');
+    idx++;
+  }, 1400);
+  ls._interval = interval;
+}
+
+function hideLoading() {
+  const ls = document.getElementById('loading-state');
+  if (ls._interval) clearInterval(ls._interval);
+  ls.classList.remove('active');
+}
+
+// ── Parse & render ──
+function parseOutput(text) {
+  try {
+    const clean = text.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
+    const s = clean.indexOf('{'), e = clean.lastIndexOf('}');
+    return JSON.parse(clean.substring(s, e+1));
+  } catch(e) { return { raw: text, parseError: true }; }
+}
+
+function renderAll() {
+  hideLoading();
+  if (!analysisResult || analysisResult.parseError) { renderRaw(); return; }
+
+  const expert = DOMAIN_EXPERTS[detectedDomain?.domain] || DOMAIN_EXPERTS.general;
+  const expertLabel = analysisResult.domain_used || expert.label;
+
+  // Analysis panel
+  let html = `<div class="expert-badge">${expert.icon} מומחה תחום פעיל: ${expertLabel}</div>`;
+
+  if (analysisResult.summary) {
+    html += `<div class="section"><div class="section-hd"><span class="stag stag-gold">סיכום</span><span class="section-title">תמצית דו"ח הבחינה</span></div>
+    <div class="card"><p>${analysisResult.summary}</p></div></div>`;
+  }
+
+  (analysisResult.rejections||[]).forEach(rej => {
+    const errorBadge = rej.examiner_error ? `<div class="card" style="border-color:rgba(200,134,110,0.4);margin-bottom:9px"><h4>🚨 שגיאת בוחן שזוהתה</h4><p>${rej.examiner_error}</p></div>` : '';
+    const weaknesses = rej.weaknesses?.length ? `<div class="card" style="border-color:rgba(200,134,110,0.25)"><h4>⚠ נקודות לתשומת לב</h4><p>${rej.weaknesses.join('<br>')}</p></div>` : '';
+    html += `<div class="section">
+      <div class="section-hd"><span class="stag stag-blue">${rej.type}</span><span class="section-title">Claims ${rej.claims} · vs. ${rej.reference}</span></div>
+      ${errorBadge}
+      <div class="card"><h4>טענת הבוחן</h4><p>${rej.examiner_argument}</p></div>
+      <div class="card"><h4>ניתוח מפורט</h4><p>${rej.our_analysis}</p></div>
+      <div class="card"><h4>💪 נקודות חוזק לתגובה</h4>
+        ${(rej.strengths||[]).map((s,i)=>`<div class="strength-row"><span class="snum">${i+1}</span><span>${s}</span></div>`).join('')}
+      </div>
+      ${weaknesses}
+    </div>`;
+  });
+
+  if (analysisResult.strategy) {
+    html += `<div class="section"><div class="section-hd"><span class="stag stag-green">אסטרטגיה</span><span class="section-title">המלצה</span></div>
+    <div class="strategy-box"><div class="strategy-title">💡 המלצת אסטרטגיה</div><div>${analysisResult.strategy}</div></div></div>`;
+  }
+
+  document.getElementById('analysis-panel').innerHTML = html;
+
+  // Response panel
+  document.getElementById('response-panel').innerHTML = `
+    <div class="section">
+      <div class="section-hd"><span class="stag stag-blue">Draft</span><span class="section-title">טיוטת תשובה לדו"ח הבחינה</span></div>
+      <div class="resp-box">
+        <div class="resp-toolbar">
+          <span class="resp-toolbar-label">Response Draft · English</span>
+          <button class="copy-btn" onclick="copyText('resp-text-content')">Copy</button>
+        </div>
+        <div class="resp-content" id="resp-text-content">${esc(analysisResult.response_draft||'')}</div>
+      </div>
+    </div>`;
+
+  // Claims panel
+  const amendments = analysisResult.claim_amendments || [];
+  let claimsHtml = `<div class="section"><div class="section-hd"><span class="stag stag-green">תיקונים</span><span class="section-title">הצעות לתיקון תביעות</span></div>`;
+  if (!amendments.length) {
+    claimsHtml += `<div class="card"><p>לא הוצעו תיקוני תביעות.</p></div>`;
+  } else {
+    amendments.forEach(a => {
+      const isAmended = a.original !== a.amended;
+      claimsHtml += `<div class="claim-diff">
+        <div class="claim-hd"><span class="claim-num">Claim ${a.claim_number}</span><span class="claim-type ${isAmended?'amended':'unchanged'}">${isAmended?'AMENDED':'UNCHANGED'}</span></div>
+        <div class="claim-body">
+          ${isAmended ? renderDiff(a.original, a.amended) : `<span style="color:var(--text-muted)">${esc(a.original||'')}</span>`}
+          ${a.support ? `<div class="claim-support">Support: ${a.support}</div>` : ''}
+          ${a.rationale ? `<div class="claim-rationale">${a.rationale}</div>` : ''}
+        </div>
+      </div>`;
+    });
+  }
+  claimsHtml += '</div>';
+  document.getElementById('claims-panel').innerHTML = claimsHtml;
+
+  document.getElementById('analysis-panel').style.display = 'block';
+  document.getElementById('response-panel').style.display = 'none';
+  document.getElementById('claims-panel').style.display = 'none';
+  document.getElementById('analyze-btn').disabled = false;
+}
+
+function renderRaw() {
+  document.getElementById('analysis-panel').innerHTML = `<div class="card"><pre style="white-space:pre-wrap;font-size:12px;direction:ltr">${esc(analysisResult.raw||'')}</pre></div>`;
+  document.getElementById('analysis-panel').style.display = 'block';
+  document.getElementById('analyze-btn').disabled = false;
+}
+
+function renderDiff(original, amended) {
+  if (!original || !amended) return esc(amended||original||'');
+  const ow = (original||'').split(' '), aw = (amended||'').split(' ');
+  let i=0, j=0;
+  while (i<ow.length && i<aw.length && ow[i]===aw[i]) i++;
+  while (j<ow.length-i && j<aw.length-i && ow[ow.length-1-j]===aw[aw.length-1-j]) j++;
+  const prefix = ow.slice(0,i).join(' ');
+  const del = ow.slice(i,ow.length-j).join(' ');
+  const ins = aw.slice(i,aw.length-j).join(' ');
+  const suffix = ow.slice(ow.length-j).join(' ');
+  let r = esc(prefix);
+  if (prefix && (del||ins)) r += ' ';
+  if (del) r += `<span class="del">${esc(del)}</span> `;
+  if (ins) r += `<span class="ins">${esc(ins)}</span>`;
+  if (suffix) r += ' '+esc(suffix);
+  return r;
+}
+
+function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function toBase64(file) {
+  return new Promise((res,rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result.split(',')[1]);
+    r.onerror = rej;
+    r.readAsDataURL(file);
+  });
+}
+
+function copyText(id) {
+  const el = document.getElementById(id);
+  navigator.clipboard.writeText(el.textContent).then(() => {
+    document.querySelector('.copy-btn').textContent = 'Copied!';
+    setTimeout(() => document.querySelector('.copy-btn').textContent = 'Copy', 2000);
+  });
+}
+</script>
+</body>
+</html>

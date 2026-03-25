@@ -1,0 +1,25 @@
+{
+  "folders": [
+    { "path": "." }
+  ],
+  "settings": {
+    "editor.wordWrap": "on",
+    "editor.tabSize": 2,
+    "files.associations": {
+      "*.md": "markdown"
+    },
+    "[html]": {
+      "editor.defaultFormatter": "vscode.html-language-features"
+    },
+    "[markdown]": {
+      "editor.defaultFormatter": "vscode.markdown-language-features"
+    }
+  },
+  "extensions": {
+    "recommendations": [
+      "esbenp.prettier-vscode",
+      "ms-vscode.vscode-html-languageservice",
+      "yzhang.markdown-all-in-one"
+    ]
+  }
+}
