@@ -261,6 +261,7 @@
         <div class="spinner"></div>
         <div class="loading-label" id="loading-label">מכין...</div>
         <div class="loading-steps-list" id="loading-steps-list"></div>
+        <button onclick="abortAnalysis()" style="margin-top:12px;background:none;border:1px solid var(--border);border-radius:6px;padding:6px 16px;color:var(--text-muted);cursor:pointer;font-size:12px;">ביטול</button>
       </div>
 
       <div id="analysis-panel" style="display:none"></div>
@@ -344,6 +345,15 @@ let detectedDomain = null;
 let confirmedDomain = null;
 let analysisResult = null;
 let currentTab = 'analysis';
+
+let abortController = null;
+
+function abortAnalysis() {
+  if (abortController) abortController.abort();
+  hideLoading();
+  document.getElementById('welcome-state').style.display = 'flex';
+  document.getElementById('analyze-btn').disabled = false;
+}
 
 // ── Load saved API key ──
 window.addEventListener('DOMContentLoaded', () => {
@@ -595,6 +605,8 @@ async function confirmDomain() {
     'מציע תיקוני תביעות...'
   ]);
 
+  abortController = new AbortController();
+
   try {
     // Build documents
     const oaFile = uploadedFiles['zone-oa'][0];
@@ -629,6 +641,7 @@ async function confirmDomain() {
     const resp = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+      signal: abortController.signal,
       body: JSON.stringify({
         model: "claude-sonnet-4-20250514",
         max_tokens: 8000,
@@ -647,6 +660,7 @@ async function confirmDomain() {
     renderAll();
 
   } catch(err) {
+    if (err.name === 'AbortError') return;
     console.error(err);
     hideLoading();
     document.getElementById('welcome-state').style.display = 'flex';
