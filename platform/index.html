@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <title>Patent OA Analyzer v2</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Noto+Serif+Hebrew:wght@300;400;600&family=DM+Sans:wght@300;400;500;600&display=swap');
@@ -49,11 +50,15 @@
 
   /* ── Sidebar ── */
   .sidebar { border-left: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; overflow-y: auto; }
+  .sidebar-toggle { background: none; border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; font-size: 11px; color: var(--text-muted); cursor: pointer; font-family: var(--mono); }
+  .sidebar-toggle:hover { border-color: var(--accent); color: var(--accent); }
+  main.sidebar-hidden { grid-template-columns: 1fr; }
+  main.sidebar-hidden .sidebar { display: none; }
   .sidebar-section { border-bottom: 1px solid var(--border); padding: 16px; }
   .sidebar-label { font-family: var(--mono); font-size: 9px; letter-spacing: 0.12em; color: var(--text-muted); text-transform: uppercase; margin-bottom: 10px; }
 
   /* ── Upload zones ── */
-  .upload-zone { border: 1px dashed var(--border); border-radius: 7px; padding: 11px 13px; cursor: pointer; transition: all 0.2s; margin-bottom: 7px; position: relative; }
+  .upload-zone { border: 1px dashed var(--border); border-radius: 7px; padding: 11px 13px; transition: all 0.2s; margin-bottom: 7px; }
   .upload-zone:hover { border-color: var(--accent); background: rgba(200,169,110,0.03); }
   .upload-zone.has-file { border-color: var(--success); border-style: solid; background: rgba(110,200,154,0.03); }
   .upload-zone.required { border-color: rgba(200,169,110,0.25); }
@@ -63,7 +68,8 @@
   .upload-desc { font-size: 11px; color: var(--text-muted); margin-right: 23px; }
   .upload-status { font-size: 10px; font-family: var(--mono); margin-top: 5px; margin-right: 23px; color: var(--success); display: none; }
   .upload-zone.has-file .upload-status { display: block; }
-  .upload-zone input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  .upload-zone input[type=file] { display: none; }
+  .upload-zone-clickable { cursor: pointer; }
 
   /* ── URL input ── */
   .url-row { display: flex; gap: 6px; margin-bottom: 7px; }
@@ -208,7 +214,7 @@
     <div class="modal-body">
       <div class="modal-label">תאר את התחום הטכנולוגי של הבקשה:</div>
       <div class="domain-input-row">
-        <input class="domain-text-input" id="domain-override" placeholder="למשל: הדפסה אינקג׳ט, מכשירים רפואי-אלקטרוניים...">
+        <input class="domain-text-input" id="domain-override" placeholder="למשל: הדפסה אינקג׳ט, מכשירים רפואי-אלקטרוניים..." onkeydown="if(event.key==='Enter')confirmDomain()">
       </div>
     </div>
     <div class="modal-footer">
@@ -227,6 +233,7 @@
     </div>
   </div>
   <div class="header-right">
+    <button class="sidebar-toggle" onclick="toggleSidebar()">⇄ Sidebar</button>
     <span class="version-badge">v2 · Skill + Expert</span>
     <span class="jurisdiction-pill" id="header-juris">EP</span>
   </div>
@@ -237,7 +244,6 @@
     <div class="tabs">
       <div class="tab active" onclick="switchTab('analysis')">ניתוח דו"ח הבחינה</div>
       <div class="tab" onclick="switchTab('response')">טיוטת תשובה</div>
-      <div class="tab" onclick="switchTab('claims')">תיקוני תביעות</div>
     </div>
 
     <div class="output-area" id="output-area">
@@ -283,36 +289,36 @@
 
     <div class="sidebar-section">
       <div class="sidebar-label">חומרים נדרשים</div>
-      <div class="upload-zone required" id="zone-oa">
-        <input type="file" accept=".pdf" onchange="handleUpload(this,'zone-oa','oa-status')">
+      <div class="upload-zone required" id="zone-oa" onclick="triggerUpload('zone-oa')">
+        <input type="file" accept=".pdf,.doc,.docx" onchange="handleUpload(this,'zone-oa','oa-status')">
         <div class="upload-header"><span class="upload-icon">📄</span><span class="upload-title">דו"ח בחינה (Office Action)</span></div>
-        <div class="upload-desc">PDF · חובה</div>
+        <div class="upload-desc">PDF / Word · חובה</div>
         <div class="upload-status" id="oa-status"></div>
       </div>
-      <div class="upload-zone" id="zone-prev-oa">
-        <input type="file" accept=".pdf" multiple onchange="handleUpload(this,'zone-prev-oa','prev-oa-status')">
+      <div class="upload-zone" id="zone-prev-oa" onclick="triggerUpload('zone-prev-oa')">
+        <input type="file" accept=".pdf,.doc,.docx" multiple onchange="handleUpload(this,'zone-prev-oa','prev-oa-status')">
         <div class="upload-header"><span class="upload-icon">📂</span><span class="upload-title">דו"חות בחינה קודמים</span></div>
-        <div class="upload-desc">PDF · מרובים · אופציונלי</div>
+        <div class="upload-desc">PDF / Word · מרובים · אופציונלי</div>
         <div class="upload-status" id="prev-oa-status"></div>
       </div>
-      <div class="upload-zone required" id="zone-app">
-        <input type="file" accept=".pdf" onchange="handleUpload(this,'zone-app','app-status')">
+      <div class="upload-zone required" id="zone-app" onclick="triggerUpload('zone-app')">
+        <input type="file" accept=".pdf,.doc,.docx" onchange="handleUpload(this,'zone-app','app-status')">
         <div class="upload-header"><span class="upload-icon">📑</span><span class="upload-title">בקשת הפטנט (Spec + Claims)</span></div>
-        <div class="upload-desc">PDF · חובה</div>
+        <div class="upload-desc">PDF / Word · חובה</div>
         <div class="upload-status" id="app-status"></div>
       </div>
-      <div class="upload-zone" id="zone-pending">
-        <input type="file" accept=".pdf" onchange="handleUpload(this,'zone-pending','pending-status')">
+      <div class="upload-zone" id="zone-pending" onclick="triggerUpload('zone-pending')">
+        <input type="file" accept=".pdf,.doc,.docx" onchange="handleUpload(this,'zone-pending','pending-status')">
         <div class="upload-header"><span class="upload-icon">📝</span><span class="upload-title">Pending Claims</span></div>
-        <div class="upload-desc">PDF · אופציונלי (אם שונות מהבקשה המקורית)</div>
+        <div class="upload-desc">PDF / Word · אופציונלי (אם שונות מהבקשה המקורית)</div>
         <div class="upload-status" id="pending-status"></div>
       </div>
     </div>
 
     <div class="sidebar-section">
       <div class="sidebar-label">Prior Art</div>
-      <div class="upload-zone" id="zone-pa">
-        <input type="file" accept=".pdf" multiple onchange="handleUpload(this,'zone-pa','pa-status')">
+      <div class="upload-zone" id="zone-pa" onclick="triggerUpload('zone-pa')">
+        <input type="file" accept=".pdf,.doc,.docx" multiple onchange="handleUpload(this,'zone-pa','pa-status')">
         <div class="upload-header"><span class="upload-icon">🔍</span><span class="upload-title">Prior Art References</span></div>
         <div class="upload-desc">PDF · מרובים · אופציונלי</div>
         <div class="upload-status" id="pa-status"></div>
@@ -347,6 +353,32 @@ let analysisResult = null;
 let currentTab = 'analysis';
 
 let abortController = null;
+
+function triggerUpload(zoneId) {
+  document.querySelector('#' + zoneId + ' input[type=file]').click();
+}
+
+async function docxToText(file) {
+  try {
+    const zip = await JSZip.loadAsync(file);
+    const xml = await zip.file('word/document.xml').async('text');
+    return xml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  } catch(e) { return ''; }
+}
+
+async function fileToContentBlock(file, title) {
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (ext === 'docx' || ext === 'doc') {
+    const text = await docxToText(file);
+    return { type: "text", text: `[${title}]\n${text}` };
+  }
+  const b64 = await toBase64(file);
+  return { type: "document", source: { type: "base64", media_type: "application/pdf", data: b64 }, title };
+}
+
+function toggleSidebar() {
+  document.querySelector('main').classList.toggle('sidebar-hidden');
+}
 
 function abortAnalysis() {
   if (abortController) abortController.abort();
@@ -525,10 +557,11 @@ function handleUpload(input, zoneId, statusId) {
   zone.classList.add('has-file');
   uploadedFiles[zoneId] = files;
   const label = files.length > 1 ? `${files.length} קבצים` : files[0].name;
-  status.innerHTML = `✓ ${label} <button onclick="clearUpload('${zoneId}','${statusId}')" style="background:none;border:none;color:var(--warning);cursor:pointer;font-size:11px;margin-right:6px;" title="הסר קובץ">✕</button>`;
+  status.innerHTML = `✓ ${label} <button onclick="event.stopPropagation();clearUpload('${zoneId}','${statusId}',event)" style="background:none;border:none;color:var(--warning);cursor:pointer;font-size:11px;margin-right:6px;" title="הסר קובץ">✕</button>`;
 }
 
-function clearUpload(zoneId, statusId) {
+function clearUpload(zoneId, statusId, event) {
+  if (event) event.stopPropagation();
   const zone = document.getElementById(zoneId);
   const status = document.getElementById(statusId);
   zone.classList.remove('has-file');
@@ -561,10 +594,10 @@ function removeUrl(i) { patentUrls.splice(i,1); renderUrls(); }
 function switchTab(tab) {
   currentTab = tab;
   document.querySelectorAll('.tab').forEach((t,i) => {
-    t.classList.toggle('active', ['analysis','response','claims'][i] === tab);
+    t.classList.toggle('active', ['analysis','response'][i] === tab);
   });
   if (analysisResult) {
-    ['analysis','response','claims'].forEach(t => {
+    ['analysis','response'].forEach(t => {
       document.getElementById(t+'-panel').style.display = t === tab ? 'block' : 'none';
     });
   }
@@ -614,21 +647,13 @@ async function confirmDomain() {
     const prevOaFiles = uploadedFiles['zone-prev-oa'] || [];
     const pendingFile = uploadedFiles['zone-pending'] ? uploadedFiles['zone-pending'][0] : null;
     const paFiles = uploadedFiles['zone-pa'] || [];
-    const allFiles = [oaFile, appFile, ...prevOaFiles, ...(pendingFile ? [pendingFile] : []), ...paFiles];
-    const allB64s = await Promise.all(allFiles.map(toBase64));
-    const oaB64 = allB64s[0];
-    const appB64 = allB64s[1];
-    const prevOaB64s = allB64s.slice(2, 2 + prevOaFiles.length);
-    const pendingB64 = pendingFile ? allB64s[2 + prevOaFiles.length] : null;
-    const paB64s = allB64s.slice(2 + prevOaFiles.length + (pendingFile ? 1 : 0));
-
-    const contentBlocks = [
-      { type: "document", source: { type: "base64", media_type: "application/pdf", data: oaB64 }, title: "Office Action (Current)" },
-      { type: "document", source: { type: "base64", media_type: "application/pdf", data: appB64 }, title: "Patent Application (Spec + Claims)" },
-      ...prevOaB64s.map((b,i) => ({ type: "document", source: { type: "base64", media_type: "application/pdf", data: b }, title: `Previous Office Action ${i+1}` })),
-      ...(pendingB64 ? [{ type: "document", source: { type: "base64", media_type: "application/pdf", data: pendingB64 }, title: "Pending Claims (current amended claims)" }] : []),
-      ...paB64s.map((b,i) => ({ type: "document", source: { type: "base64", media_type: "application/pdf", data: b }, title: `Prior Art Reference ${i+1}` }))
-    ];
+    const contentBlocks = await Promise.all([
+      fileToContentBlock(oaFile, "Office Action (Current)"),
+      fileToContentBlock(appFile, "Patent Application (Spec + Claims)"),
+      ...prevOaFiles.map((f,i) => fileToContentBlock(f, `Previous Office Action ${i+1}`)),
+      ...(pendingFile ? [fileToContentBlock(pendingFile, "Pending Claims (current amended claims)")] : []),
+      ...paFiles.map((f,i) => fileToContentBlock(f, `Prior Art Reference ${i+1}`))
+    ]);
 
     if (patentUrls.length) {
       contentBlocks.push({ type: "text", text: `Additional prior art URLs (Google Patents):\n${patentUrls.join('\n')}` });
@@ -688,31 +713,22 @@ RESPONSE STYLE (learned from user's own responses):
 
 OUTPUT: Return a single JSON object (no markdown fences):
 {
-  "summary": "2-3 sentence Hebrew summary of the OA",
+  "summary": "2-3 sentence English summary of the OA",
   "domain_used": "domain name for display",
   "rejections": [
     {
       "type": "e.g. Art. 54 EPC / Novelty",
       "claims": "1, 11",
       "reference": "D1",
-      "examiner_argument": "Hebrew — what the Examiner argued",
-      "examiner_error": "Hebrew — specific error or misreading identified (null if none)",
-      "our_analysis": "Hebrew — detailed element-by-element analysis",
-      "strengths": ["Hebrew strength 1", "Hebrew strength 2"],
-      "weaknesses": ["Hebrew weakness if any"]
+      "examiner_argument": "English — what the Examiner argued",
+      "examiner_error": "English — specific error or misreading identified (null if none)",
+      "our_analysis": "English — detailed element-by-element analysis",
+      "strengths": ["English strength 1", "English strength 2"],
+      "weaknesses": ["English weakness if any"]
     }
   ],
-  "strategy": "Hebrew strategic recommendation with reasoning",
-  "response_draft": "Full English response draft in the user's style",
-  "claim_amendments": [
-    {
-      "claim_number": "1",
-      "original": "original claim text",
-      "amended": "amended claim text",
-      "support": "page X lines Y-Z",
-      "rationale": "Hebrew rationale"
-    }
-  ]
+  "strategy": "English strategic recommendation with reasoning",
+  "response_draft": "Full English response draft in the user's style"
 }`;
 }
 
@@ -723,6 +739,8 @@ Jurisdiction: ${juris}
 Technical domain: ${domainDesc}
 
 Apply the full Patent Examiner Skill instructions and domain expert knowledge.
+Focus ONLY on novelty rejections (Art. 54 EPC / §102 USC) and inventive step rejections (Art. 56 EPC / §103 USC).
+Do NOT analyze clarity (Art. 84 EPC), unity of invention, added matter, or any other type of objection.
 Focus ONLY on what the Examiner actually argued.
 Identify any misreadings of the prior art or the invention.
 Return the complete analysis as a JSON object.`;
@@ -799,6 +817,7 @@ function renderAll() {
     <div class="strategy-box"><div class="strategy-title">💡 המלצת אסטרטגיה</div><div>${analysisResult.strategy}</div></div></div>`;
   }
 
+  html += `<div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--border);text-align:center"><button onclick="requestClaimAmendments()" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 22px;font-size:13px;cursor:pointer;font-family:var(--sans);color:var(--accent2);">✏️ הצע תיקוני תביעות</button></div>`;
   document.getElementById('analysis-panel').innerHTML = html;
 
   // Response panel
@@ -814,31 +833,94 @@ function renderAll() {
       </div>
     </div>`;
 
-  // Claims panel
-  const amendments = analysisResult.claim_amendments || [];
-  let claimsHtml = `<div class="section"><div class="section-hd"><span class="stag stag-green">תיקונים</span><span class="section-title">הצעות לתיקון תביעות</span></div>`;
-  if (!amendments.length) {
-    claimsHtml += `<div class="card"><p>לא הוצעו תיקוני תביעות.</p></div>`;
-  } else {
-    amendments.forEach(a => {
-      const isAmended = a.original !== a.amended;
-      claimsHtml += `<div class="claim-diff">
-        <div class="claim-hd"><span class="claim-num">Claim ${a.claim_number}</span><span class="claim-type ${isAmended?'amended':'unchanged'}">${isAmended?'AMENDED':'UNCHANGED'}</span></div>
-        <div class="claim-body">
-          ${isAmended ? renderDiff(a.original, a.amended) : `<span style="color:var(--text-muted)">${esc(a.original||'')}</span>`}
-          ${a.support ? `<div class="claim-support">Support: ${a.support}</div>` : ''}
-          ${a.rationale ? `<div class="claim-rationale">${a.rationale}</div>` : ''}
-        </div>
-      </div>`;
-    });
-  }
-  claimsHtml += '</div>';
-  document.getElementById('claims-panel').innerHTML = claimsHtml;
-
   document.getElementById('analysis-panel').style.display = 'block';
   document.getElementById('response-panel').style.display = 'none';
-  document.getElementById('claims-panel').style.display = 'none';
   document.getElementById('analyze-btn').disabled = false;
+}
+
+async function requestClaimAmendments() {
+  const apiKey = getApiKey();
+  if (!apiKey) { alert('נא להזין Anthropic API Key'); return; }
+
+  const btn = document.querySelector('[onclick="requestClaimAmendments()"]');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ מכין הצעות...'; }
+
+  try {
+    const oaFile = uploadedFiles['zone-oa'][0];
+    const appFile = uploadedFiles['zone-app'][0];
+    const prevOaFiles = uploadedFiles['zone-prev-oa'] || [];
+    const pendingFile = uploadedFiles['zone-pending'] ? uploadedFiles['zone-pending'][0] : null;
+
+    const contentBlocks = await Promise.all([
+      fileToContentBlock(oaFile, "Office Action (Current)"),
+      fileToContentBlock(appFile, "Patent Application (Spec + Claims)"),
+      ...prevOaFiles.map((f,i) => fileToContentBlock(f, `Previous Office Action ${i+1}`)),
+      ...(pendingFile ? [fileToContentBlock(pendingFile, "Pending Claims")] : [])
+    ]);
+
+    contentBlocks.push({ type: "text", text: `Based on the Office Action and patent application, propose claim amendments to overcome the novelty and inventive step rejections. Return JSON (no markdown):
+{
+  "claim_amendments": [
+    {
+      "claim_number": "1",
+      "original": "original claim text",
+      "amended": "amended claim text with changes tracked",
+      "support": "page X lines Y-Z",
+      "rationale": "why this amendment overcomes the rejection"
+    }
+  ]
+}` });
+
+    const resp = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+      body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 4000, messages: [{ role: "user", content: contentBlocks }] })
+    });
+
+    const data = await resp.json();
+    if (!resp.ok || !data.content) throw new Error(data.error?.message || JSON.stringify(data));
+    const text = data.content.map(c => c.text||'').join('');
+    const result = parseOutput(text);
+    const amendments = result.claim_amendments || [];
+
+    let claimsHtml = `<div class="section"><div class="section-hd"><span class="stag stag-green">תיקונים</span><span class="section-title">הצעות לתיקון תביעות</span></div>`;
+    if (!amendments.length) {
+      claimsHtml += `<div class="card"><p>לא הוצעו תיקוני תביעות.</p></div>`;
+    } else {
+      amendments.forEach(a => {
+        const isAmended = a.original !== a.amended;
+        claimsHtml += `<div class="claim-diff">
+          <div class="claim-hd"><span class="claim-num">Claim ${a.claim_number}</span><span class="claim-type ${isAmended?'amended':'unchanged'}">${isAmended?'AMENDED':'UNCHANGED'}</span></div>
+          <div class="claim-body">
+            ${isAmended ? renderDiff(a.original, a.amended) : `<span style="color:var(--text-muted)">${esc(a.original||'')}</span>`}
+            ${a.support ? `<div class="claim-support">Support: ${a.support}</div>` : ''}
+            ${a.rationale ? `<div class="claim-rationale">${a.rationale}</div>` : ''}
+          </div>
+        </div>`;
+      });
+    }
+    claimsHtml += '</div>';
+
+    const panel = document.getElementById('claims-panel');
+    panel.innerHTML = claimsHtml;
+    panel.style.display = 'block';
+    document.getElementById('analysis-panel').style.display = 'none';
+
+    // Add claims tab if not exists
+    const tabs = document.querySelector('.tabs');
+    if (!document.querySelector('[onclick="switchTab(\'claims\')"]')) {
+      const t = document.createElement('div');
+      t.className = 'tab';
+      t.setAttribute('onclick', "switchTab('claims')");
+      t.textContent = 'תיקוני תביעות';
+      tabs.appendChild(t);
+    }
+    switchTab('claims');
+
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.innerHTML = '✏️ הצע תיקוני תביעות'; }
+    alert('שגיאה: ' + e.message);
+  }
 }
 
 function renderRaw() {
