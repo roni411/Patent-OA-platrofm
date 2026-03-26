@@ -526,7 +526,17 @@ function handleUpload(input, zoneId, statusId) {
   if (!files.length) return;
   zone.classList.add('has-file');
   uploadedFiles[zoneId] = files;
-  status.textContent = '✓ ' + (files.length > 1 ? `${files.length} קבצים` : files[0].name);
+  const label = files.length > 1 ? `${files.length} קבצים` : files[0].name;
+  status.innerHTML = `✓ ${label} <button onclick="clearUpload('${zoneId}','${statusId}')" style="background:none;border:none;color:var(--warning);cursor:pointer;font-size:11px;margin-right:6px;" title="הסר קובץ">✕</button>`;
+}
+
+function clearUpload(zoneId, statusId) {
+  const zone = document.getElementById(zoneId);
+  const status = document.getElementById(statusId);
+  zone.classList.remove('has-file');
+  zone.querySelector('input[type=file]').value = '';
+  status.innerHTML = '';
+  delete uploadedFiles[zoneId];
 }
 
 function addUrl() {
