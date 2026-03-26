@@ -608,6 +608,7 @@ Return ONLY a JSON object with NO markdown:
     });
 
     const data = await resp.json();
+    if (!resp.ok || !data.content) throw new Error(data.error?.message || JSON.stringify(data));
     const text = data.content.map(c => c.text||'').join('');
     const clean = text.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
     detectedDomain = JSON.parse(clean);
@@ -703,6 +704,10 @@ async function confirmDomain() {
     });
 
     const data = await resp.json();
+    if (!resp.ok || !data.content) {
+      const msg = data.error?.message || JSON.stringify(data);
+      throw new Error(`API error: ${msg}`);
+    }
     const text = data.content.map(c => c.text||'').join('');
     analysisResult = parseOutput(text);
     renderAll();
