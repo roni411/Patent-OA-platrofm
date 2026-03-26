@@ -335,6 +335,12 @@
       <div id="url-list"></div>
     </div>
 
+    <div class="sidebar-section">
+      <div class="sidebar-label">Anthropic API Key</div>
+      <input type="password" id="api-key-input" placeholder="sk-ant-..." style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:11px;font-family:var(--mono);outline:none;direction:ltr;" oninput="localStorage.setItem('oa_api_key',this.value)">
+      <div style="font-size:10px;color:var(--text-muted);margin-top:5px;">Key נשמר מקומית בדפדפן בלבד</div>
+    </div>
+
     <button class="analyze-btn" id="analyze-btn" onclick="startAnalysis()">
       ⚡ נתח דו"ח בחינה
     </button>
@@ -350,6 +356,16 @@ let detectedDomain = null;
 let confirmedDomain = null;
 let analysisResult = null;
 let currentTab = 'analysis';
+
+// ── Load saved API key ──
+window.addEventListener('DOMContentLoaded', () => {
+  const saved = localStorage.getItem('oa_api_key');
+  if (saved) document.getElementById('api-key-input').value = saved;
+});
+
+function getApiKey() {
+  return document.getElementById('api-key-input').value.trim();
+}
 
 // ── The full embedded skill ──
 const PATENT_SKILL = `
@@ -555,13 +571,16 @@ async function startAnalysis() {
   document.getElementById('analyze-btn').disabled = true;
   showLoading('מזהה תחום טכנולוגי...', ['קורא את בקשת הפטנט...', 'מנתח IPC class ומילות מפתח...', 'מכין זיהוי תחום...']);
 
+  const apiKey = getApiKey();
+  if (!apiKey) { alert('נא להזין Anthropic API Key'); document.getElementById('analyze-btn').disabled = false; return; }
+
   try {
     const appFile = uploadedFiles['zone-app'][0];
     const appB64 = await toBase64(appFile);
 
     const resp = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
       body: JSON.stringify({
         model: "claude-sonnet-4-20250514",
         max_tokens: 500,
@@ -662,7 +681,7 @@ async function confirmDomain() {
 
     const resp = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
       body: JSON.stringify({
         model: "claude-sonnet-4-20250514",
         max_tokens: 8000,
