@@ -203,29 +203,17 @@
   <div class="modal">
     <div class="modal-header">
       <span class="modal-icon">🔬</span>
-      <span class="modal-title">זיהוי תחום טכנולוגי</span>
+      <span class="modal-title">תחום טכנולוגי</span>
     </div>
     <div class="modal-body">
-      <div class="domain-detected">
-        <div class="domain-detected-label">זוהה אוטומטית מתוך הבקשה</div>
-        <div class="domain-main">
-          <span class="domain-icon" id="d-icon">⚙️</span>
-          <div>
-            <div class="domain-name" id="d-name">—</div>
-            <div class="domain-ipc" id="d-ipc">—</div>
-          </div>
-        </div>
-        <div class="domain-confidence" id="d-conf"></div>
-        <div class="domain-keywords" id="d-keywords"></div>
-      </div>
-      <div class="modal-label">תיקון ידני (אופציונלי) — תאר את התחום בצורה מדויקת יותר:</div>
+      <div class="modal-label">תאר את התחום הטכנולוגי של הבקשה:</div>
       <div class="domain-input-row">
         <input class="domain-text-input" id="domain-override" placeholder="למשל: הדפסה אינקג׳ט, מכשירים רפואי-אלקטרוניים...">
       </div>
     </div>
     <div class="modal-footer">
       <button class="btn-secondary" onclick="cancelAnalysis()">ביטול</button>
-      <button class="btn-primary" onclick="confirmDomain()">אשר והמשך לניתוח ⚡</button>
+      <button class="btn-primary" onclick="confirmDomain()">המשך לניתוח ⚡</button>
     </div>
   </div>
 </div>
@@ -572,65 +560,15 @@ function switchTab(tab) {
   }
 }
 
-// ── Step 1: Start — validate & kick off domain detection ──
-async function startAnalysis() {
+// ── Step 1: Validate & show domain input modal ──
+function startAnalysis() {
   if (!uploadedFiles['zone-oa'] || !uploadedFiles['zone-app']) {
     alert('נא להעלות לפחות את דו"ח הבחינה ואת בקשת הפטנט');
     return;
   }
-  document.getElementById('analyze-btn').disabled = true;
-  showLoading('מזהה תחום טכנולוגי...', ['קורא את בקשת הפטנט...', 'מנתח IPC class ומילות מפתח...', 'מכין זיהוי תחום...']);
-
   const apiKey = getApiKey();
-  if (!apiKey) { alert('נא להזין Anthropic API Key'); document.getElementById('analyze-btn').disabled = false; return; }
-
-  try {
-    const appFile = uploadedFiles['zone-app'][0];
-    const appB64 = await toBase64(appFile);
-
-    const resp = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 500,
-        system: `You are a patent classification expert. Read the patent application and identify the technical domain.
-Return ONLY a JSON object with NO markdown:
-{"domain":"one of: mechanical|printing|biomedical|software|chemistry|electronics|general","ipc":"IPC class code e.g. B41N","confidence":"high|medium|low","keywords":["key1","key2","key3"],"description":"1 short sentence in Hebrew describing the technology"}`,
-        messages: [{
-          role: "user",
-          content: [
-            { type: "document", source: { type: "base64", media_type: "application/pdf", data: appB64 }, title: "Patent Application" },
-            { type: "text", text: "Identify the technical domain of this patent application. Return only JSON." }
-          ]
-        }]
-      })
-    });
-
-    const data = await resp.json();
-    if (!resp.ok || !data.content) throw new Error(data.error?.message || JSON.stringify(data));
-    const text = data.content.map(c => c.text||'').join('');
-    const clean = text.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
-    detectedDomain = JSON.parse(clean);
-    showDomainModal(detectedDomain);
-
-  } catch(err) {
-    console.error(err);
-    // Fallback — go straight to analysis with general domain
-    detectedDomain = { domain: 'general', ipc: '—', confidence: 'low', keywords: [], description: 'לא זוהה תחום אוטומטית' };
-    showDomainModal(detectedDomain);
-  }
-}
-
-// ── Step 2: Show domain modal ──
-function showDomainModal(d) {
-  hideLoading();
-  const expert = DOMAIN_EXPERTS[d.domain] || DOMAIN_EXPERTS.general;
-  document.getElementById('d-icon').textContent = expert.icon;
-  document.getElementById('d-name').textContent = expert.label;
-  document.getElementById('d-ipc').textContent = d.ipc ? `IPC: ${d.ipc}` : '';
-  document.getElementById('d-conf').textContent = d.description || '';
-  document.getElementById('d-keywords').innerHTML = (d.keywords||[]).map(k => `<span class="kw-tag">${k}</span>`).join('');
+  if (!apiKey) { alert('נא להזין Anthropic API Key'); return; }
+  document.getElementById('analyze-btn').disabled = true;
   document.getElementById('domain-override').value = '';
   document.getElementById('domain-modal').classList.add('active');
 }
@@ -640,17 +578,13 @@ function cancelAnalysis() {
   document.getElementById('analyze-btn').disabled = false;
 }
 
-// ── Step 3: Confirm domain → run full analysis ──
+// ── Step 2: Confirm domain → run full analysis ──
 async function confirmDomain() {
+  const domainDescription = document.getElementById('domain-override').value.trim();
+  if (!domainDescription) { alert('נא להזין תחום טכנולוגי'); return; }
   document.getElementById('domain-modal').classList.remove('active');
   const apiKey = getApiKey();
-  if (!apiKey) { alert('נא להזין Anthropic API Key'); document.getElementById('analyze-btn').disabled = false; return; }
-  const override = document.getElementById('domain-override').value.trim();
-  confirmedDomain = override || detectedDomain;
-
-  const domainKey = typeof confirmedDomain === 'object' ? confirmedDomain.domain : 'general';
-  const expert = DOMAIN_EXPERTS[domainKey] || DOMAIN_EXPERTS.general;
-  const domainDescription = override || (typeof confirmedDomain === 'object' ? confirmedDomain.description : confirmedDomain);
+  const expert = DOMAIN_EXPERTS.general;
 
   showLoading('מנתח את דו"ח הבחינה...', [
     'קורא את דו"ח הבחינה...',
