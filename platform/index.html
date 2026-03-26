@@ -632,6 +632,8 @@ function cancelAnalysis() {
 // ── Step 3: Confirm domain → run full analysis ──
 async function confirmDomain() {
   document.getElementById('domain-modal').classList.remove('active');
+  const apiKey = getApiKey();
+  if (!apiKey) { alert('נא להזין Anthropic API Key'); document.getElementById('analyze-btn').disabled = false; return; }
   const override = document.getElementById('domain-override').value.trim();
   confirmedDomain = override || detectedDomain;
 
