@@ -47,7 +47,8 @@
   .jurisdiction-pill { font-family: var(--mono); font-size: 11px; padding: 4px 10px; border-radius: 20px; border: 1px solid var(--accent); color: var(--accent); }
 
   /* ── Layout ── */
-  main { flex: 1; display: grid; grid-template-columns: 300px 1fr; height: calc(100vh - 61px); overflow: hidden; }
+  main { flex: 1; display: grid; grid-template-columns: 1fr 320px; height: calc(100vh - 61px); overflow: hidden; }
+  main.sidebar-hidden { grid-template-columns: 1fr; }
 
   /* ── Sidebar ── */
   .sidebar { border-left: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; overflow-y: auto; }
@@ -93,7 +94,8 @@
   .tab { padding: 13px 18px; font-size: 12px; font-family: var(--mono); color: var(--text-muted); cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.2s; white-space: nowrap; }
   .tab:hover { color: var(--text); }
   .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-  .output-area { flex: 1; overflow-y: auto; padding: 24px 28px; }
+  .output-area { flex: 1; overflow-y: auto; padding: 28px 40px; }
+  main.sidebar-hidden .output-area { padding: 32px 15%; }
 
   /* ── States ── */
   .welcome { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 14px; color: var(--text-muted); }
@@ -895,6 +897,7 @@ function renderAll() {
   document.getElementById('analysis-panel').style.display = 'block';
   document.getElementById('response-panel').style.display = 'none';
   document.getElementById('analyze-btn').disabled = false;
+  document.querySelector('main').classList.add('sidebar-hidden');
 }
 
 async function requestClaimAmendments() {
