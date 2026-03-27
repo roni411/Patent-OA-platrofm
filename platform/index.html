@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 <title>Patent OA Analyzer v2</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Noto+Serif+Hebrew:wght@300;400;600&family=DM+Sans:wght@300;400;500;600&display=swap');
@@ -72,14 +73,6 @@
   .upload-zone-clickable { cursor: pointer; }
 
   /* ── URL input ── */
-  .url-row { display: flex; gap: 6px; margin-bottom: 7px; }
-  .url-input { flex: 1; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; color: var(--text); font-size: 11px; font-family: var(--mono); outline: none; direction: ltr; }
-  .url-input:focus { border-color: var(--accent2); }
-  .url-input::placeholder { color: var(--text-muted); }
-  .url-add { background: var(--surface3); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; color: var(--accent2); cursor: pointer; font-size: 14px; }
-  .url-add:hover { border-color: var(--accent2); }
-  .url-item { display: flex; align-items: center; justify-content: space-between; background: var(--surface2); border-radius: 4px; padding: 5px 8px; font-size: 10px; font-family: var(--mono); color: var(--accent2); direction: ltr; margin-bottom: 4px; }
-  .url-item button { background: none; border: none; color: var(--text-muted); cursor: pointer; }
 
   /* ── Jurisdiction ── */
   .juris-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
@@ -324,11 +317,8 @@
         <div class="upload-desc">PDF · מרובים · אופציונלי</div>
         <div class="upload-status" id="pa-status"></div>
       </div>
-      <div class="url-row">
-        <input class="url-input" id="url-input" type="url" placeholder="https://patents.google.com/..." dir="ltr">
-        <button class="url-add" onclick="addUrl()">+</button>
-      </div>
-      <div id="url-list"></div>
+      <button id="trim-btn" onclick="trimPriorArt()" style="display:none;width:100%;margin-top:6px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px;font-size:11px;cursor:pointer;font-family:var(--mono);color:var(--accent2);">✂️ חתוך לדפים הרלוונטיים אוטומטית</button>
+      <div id="trim-status" style="font-size:10px;color:var(--text-muted);margin-top:5px;font-family:var(--mono);"></div>
     </div>
 
     <div class="sidebar-section">
@@ -375,6 +365,98 @@ async function fileToContentBlock(file, title) {
   }
   const b64 = await toBase64(file);
   return { type: "document", source: { type: "base64", media_type: "application/pdf", data: b64 }, title };
+}
+
+// ── Show trim button when both OA and prior art are uploaded ──
+function checkTrimBtn() {
+  const show = uploadedFiles['zone-oa'] && uploadedFiles['zone-pa'];
+  document.getElementById('trim-btn').style.display = show ? 'block' : 'none';
+}
+
+async function trimPriorArt() {
+  const apiKey = getApiKey();
+  if (!apiKey) { alert('נא להזין Anthropic API Key'); return; }
+  const paFiles = uploadedFiles['zone-pa'];
+  if (!paFiles || !paFiles.length) return;
+
+  const btn = document.getElementById('trim-btn');
+  const status = document.getElementById('trim-status');
+  btn.disabled = true;
+  btn.textContent = '⏳ מזהה דפים רלוונטיים...';
+  status.textContent = '';
+
+  try {
+    // Ask Claude which pages are cited for each reference
+    const oaBlock = await fileToContentBlock(uploadedFiles['zone-oa'][0], 'Office Action');
+    const refNames = paFiles.map((f,i) => `D${i+1}: ${f.name}`).join('\n');
+
+    const resp = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 500,
+        messages: [{ role: "user", content: [
+          oaBlock,
+          { type: "text", text: `The following prior art files were cited:\n${refNames}\n\nFor each reference, list ALL page numbers cited in the Office Action (include a buffer of ±2 pages for context).\nReturn ONLY JSON, no markdown:\n{"D1":[1,2,3],"D2":[5,6,7]}` }
+        ]}]
+      })
+    });
+
+    const data = await resp.json();
+    if (!resp.ok || !data.content) throw new Error(data.error?.message || 'API error');
+    const raw = data.content.map(c => c.text||'').join('');
+    const clean = raw.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
+    const s = clean.indexOf('{'), e = clean.lastIndexOf('}');
+    const pageMap = JSON.parse(clean.substring(s, e+1));
+
+    // Trim each PDF using pdf-lib
+    const { PDFDocument } = PDFLib;
+    const trimmedFiles = [];
+    let totalSaved = 0;
+
+    for (let i = 0; i < paFiles.length; i++) {
+      const file = paFiles[i];
+      const key = `D${i+1}`;
+      const pages = pageMap[key];
+
+      if (!pages || !pages.length || file.name.match(/\.(doc|docx)$/i)) {
+        trimmedFiles.push(file);
+        continue;
+      }
+
+      const ab = await file.arrayBuffer();
+      const srcDoc = await PDFDocument.load(ab);
+      const totalPages = srcDoc.getPageCount();
+      // Convert 1-based to 0-based, clamp to valid range
+      const indices = [...new Set(pages.map(p => p-1).filter(p => p >= 0 && p < totalPages))].sort((a,b)=>a-b);
+
+      const newDoc = await PDFDocument.create();
+      const copied = await newDoc.copyPages(srcDoc, indices);
+      copied.forEach(p => newDoc.addPage(p));
+      const pdfBytes = await newDoc.save();
+
+      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+      const trimmedFile = new File([blob], file.name.replace('.pdf', `_trimmed_${indices.length}pp.pdf`), { type: 'application/pdf' });
+      trimmedFiles.push(trimmedFile);
+      totalSaved += totalPages - indices.length;
+
+      status.textContent += `${key}: ${totalPages} עמ' → ${indices.length} עמ' (עמ' ${pages.join(', ')})\n`;
+    }
+
+    uploadedFiles['zone-pa'] = trimmedFiles;
+    const label = trimmedFiles.length > 1 ? `${trimmedFiles.length} קבצים (חתוכים)` : trimmedFiles[0].name;
+    document.getElementById('pa-status').innerHTML = `✓ ${label} <button onclick="event.stopPropagation();clearUpload('zone-pa','pa-status',event)" style="background:none;border:none;color:var(--warning);cursor:pointer;font-size:11px;margin-right:6px;" title="הסר קובץ">✕</button>`;
+
+    btn.textContent = '✅ חיתוך הושלם';
+    status.style.color = 'var(--success)';
+
+  } catch(err) {
+    btn.disabled = false;
+    btn.textContent = '✂️ חתוך לדפים הרלוונטיים אוטומטית';
+    status.textContent = 'שגיאה: ' + err.message;
+    status.style.color = 'var(--warning)';
+  }
 }
 
 function toggleSidebar() {
@@ -559,6 +641,7 @@ function handleUpload(input, zoneId, statusId) {
   uploadedFiles[zoneId] = files;
   const label = files.length > 1 ? `${files.length} קבצים` : files[0].name;
   status.innerHTML = `✓ ${label} <button onclick="event.stopPropagation();clearUpload('${zoneId}','${statusId}',event)" style="background:none;border:none;color:var(--warning);cursor:pointer;font-size:11px;margin-right:6px;" title="הסר קובץ">✕</button>`;
+  checkTrimBtn();
 }
 
 function clearUpload(zoneId, statusId, event) {
@@ -571,26 +654,6 @@ function clearUpload(zoneId, statusId, event) {
   delete uploadedFiles[zoneId];
 }
 
-function addUrl() {
-  const input = document.getElementById('url-input');
-  const val = input.value.trim();
-  if (!val || !val.startsWith('http')) return;
-  patentUrls.push(val);
-  renderUrls();
-  input.value = '';
-}
-
-document.getElementById('url-input').addEventListener('keydown', e => { if (e.key === 'Enter') addUrl(); });
-
-function renderUrls() {
-  const list = document.getElementById('url-list');
-  list.innerHTML = patentUrls.map((url, i) => {
-    const short = url.replace('https://patents.google.com/patent/','').split('/')[0];
-    return `<div class="url-item"><span>${short}</span><button onclick="removeUrl(${i})">×</button></div>`;
-  }).join('');
-}
-
-function removeUrl(i) { patentUrls.splice(i,1); renderUrls(); }
 
 function switchTab(tab) {
   currentTab = tab;
@@ -634,9 +697,7 @@ async function confirmDomain() {
     'קורא את דו"ח הבחינה...',
     'מנתח ה-prior art אל מול התביעות...',
     'בודק כל אלמנט claim-by-claim...',
-    'מזמן מומחה תחום...',
-    'מכין טיוטת תשובה...',
-    'מציע תיקוני תביעות...'
+    'מכין טיוטת תשובה...'
   ]);
 
   abortController = new AbortController();
@@ -656,9 +717,6 @@ async function confirmDomain() {
       ...paFiles.map((f,i) => fileToContentBlock(f, `Prior Art Reference ${i+1}`))
     ]);
 
-    if (patentUrls.length) {
-      contentBlocks.push({ type: "text", text: `Additional prior art URLs (Google Patents):\n${patentUrls.join('\n')}` });
-    }
 
     contentBlocks.push({ type: "text", text: buildAnalysisPrompt(jurisdiction, domainDescription) });
 
