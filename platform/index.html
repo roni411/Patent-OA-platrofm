@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+<script src="https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
 <title>Patent OA Analyzer v2</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Noto+Serif+Hebrew:wght@300;400;600&family=DM+Sans:wght@300;400;500;600&display=swap');
@@ -412,24 +413,45 @@ async function trimPriorArt() {
     const s = clean.indexOf('{'), e = clean.lastIndexOf('}');
     const refMap = JSON.parse(clean.substring(s, e+1));
 
-    // Convert section names to page ranges based on patent document structure
-    function sectionPages(sections, total) {
+    // Scan PDF text with PDF.js to find section heading pages
+    async function findSectionStartPages(arrayBuffer) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer.slice(0) }).promise;
+      const total = pdf.numPages;
+      let claimsPage = null, examplesPage = null;
+
+      const claimsRe = /^(claims?|CLAIMS?)[\s:.]*/;
+      const examplesRe = /\b(examples?|EXAMPLES?)\b|following\s+(examples?|embodiments?)/i;
+
+      for (let p = 1; p <= total; p++) {
+        const page = await pdf.getPage(p);
+        const content = await page.getTextContent();
+        const lines = content.items.map(i => i.str.trim()).filter(Boolean);
+        for (const line of lines) {
+          if (claimsPage === null && claimsRe.test(line)) { claimsPage = p; }
+          if (examplesPage === null && examplesRe.test(line)) { examplesPage = p; }
+        }
+        if (claimsPage !== null && examplesPage !== null) break;
+      }
+      return { claimsPage, examplesPage, total };
+    }
+
+    async function sectionPages(sections, arrayBuffer) {
+      const { claimsPage, examplesPage, total } = await findSectionStartPages(arrayBuffer);
       const set = new Set();
       for (const sec of sections) {
         if (sec === 'abstract') {
           set.add(1);
         } else if (sec === 'claims') {
-          // Claims: last ~15% of doc, minimum 5 pages
-          const start = Math.max(1, total - Math.max(5, Math.ceil(total * 0.15)));
+          const start = claimsPage || Math.max(1, total - 30);
           for (let p = start; p <= total; p++) set.add(p);
         } else if (sec === 'examples') {
-          // Examples: roughly 55–88% of doc
-          const start = Math.max(1, Math.floor(total * 0.55));
-          const end = Math.min(total, Math.ceil(total * 0.88));
+          const start = examplesPage || Math.max(1, Math.floor(total * 0.55));
+          const end = claimsPage ? claimsPage - 1 : Math.min(total, Math.ceil(total * 0.88));
           for (let p = start; p <= end; p++) set.add(p);
         } else if (sec === 'description') {
-          // Full description: pages 2 to ~85%
-          for (let p = 2; p <= Math.ceil(total * 0.85); p++) set.add(p);
+          const end = claimsPage ? claimsPage - 1 : Math.ceil(total * 0.85);
+          for (let p = 2; p <= end; p++) set.add(p);
         }
       }
       return [...set].sort((a,b) => a-b);
@@ -459,7 +481,10 @@ async function trimPriorArt() {
       // Merge explicit pages + section-derived pages, add ±2 buffer to explicit pages
       let allPages = new Set();
       explicitPages.forEach(p => { for (let d=-2; d<=2; d++) allPages.add(p+d); });
-      sectionPages(sections, totalPages).forEach(p => allPages.add(p));
+      if (sections.length) {
+        const secPgs = await sectionPages(sections, ab);
+        secPgs.forEach(p => allPages.add(p));
+      }
 
       const indices = [...allPages].map(p => p-1).filter(p => p >= 0 && p < totalPages)
         .sort((a,b) => a-b).filter((v,i,a) => a.indexOf(v) === i);
