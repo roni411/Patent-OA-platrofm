@@ -90,7 +90,7 @@
 
   /* ── Content ── */
   .content { display: flex; flex-direction: column; overflow: hidden; }
-  .tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--surface); padding: 0 24px; }
+  .tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--surface); padding: 0 24px; position: sticky; top: 0; z-index: 10; }
   .tab { padding: 13px 18px; font-size: 12px; font-family: var(--mono); color: var(--text-muted); cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.2s; white-space: nowrap; }
   .tab:hover { color: var(--text); }
   .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
@@ -851,7 +851,7 @@ function renderAll() {
   const expertLabel = analysisResult.domain_used || expert.label;
 
   // Analysis panel
-  let html = `<div class="expert-badge">${expert.icon} מומחה תחום פעיל: ${expertLabel}</div>`;
+  let html = `<div class="expert-badge" style="display:flex;align-items:center;justify-content:space-between">${expert.icon} מומחה תחום פעיל: ${expertLabel}<button class="copy-btn" onclick="copyRich('analysis-panel')">Copy</button></div>`;
 
   if (analysisResult.summary) {
     html += `<div class="section"><div class="section-hd"><span class="stag stag-gold">סיכום</span><span class="section-title">תמצית דו"ח הבחינה</span></div>
@@ -1020,11 +1020,25 @@ function toBase64(file) {
   });
 }
 
+async function copyRich(id) {
+  const el = document.getElementById(id);
+  const btn = el.querySelector('.copy-btn') || document.querySelector(`[onclick="copyRich('${id}')"]`);
+  try {
+    await navigator.clipboard.write([new ClipboardItem({
+      'text/html': new Blob([el.innerHTML], { type: 'text/html' }),
+      'text/plain': new Blob([el.innerText], { type: 'text/plain' })
+    })]);
+  } catch(e) {
+    await navigator.clipboard.writeText(el.innerText);
+  }
+  if (btn) { btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = 'Copy', 2000); }
+}
+
 function copyText(id) {
   const el = document.getElementById(id);
+  const btn = el.closest('.resp-box')?.querySelector('.copy-btn');
   navigator.clipboard.writeText(el.textContent).then(() => {
-    document.querySelector('.copy-btn').textContent = 'Copied!';
-    setTimeout(() => document.querySelector('.copy-btn').textContent = 'Copy', 2000);
+    if (btn) { btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = 'Copy', 2000); }
   });
 }
 </script>
