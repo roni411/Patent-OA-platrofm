@@ -325,6 +325,12 @@
     </div>
 
     <div class="sidebar-section">
+      <div class="sidebar-label">סעיפים לדילוג (אופציונלי)</div>
+      <textarea id="skip-sections" rows="3" placeholder="למשל: סעיפים 4.1.1-4.1.5, סעיף 5&#10;או: Remarks, dependent claims" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:11px;font-family:var(--mono);outline:none;resize:vertical;direction:rtl;box-sizing:border-box;"></textarea>
+      <div style="font-size:10px;color:var(--text-muted);margin-top:5px;">הזיני מספרי סעיפים או כותרות שאין צורך לנתח</div>
+    </div>
+
+    <div class="sidebar-section">
       <div class="sidebar-label">Anthropic API Key</div>
       <input type="password" id="api-key-input" placeholder="sk-ant-..." style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:11px;font-family:var(--mono);outline:none;direction:ltr;" oninput="localStorage.setItem('oa_api_key',this.value)">
       <div style="font-size:10px;color:var(--text-muted);margin-top:5px;">Key נשמר מקומית בדפדפן בלבד</div>
@@ -777,7 +783,8 @@ async function confirmDomain() {
     ]);
 
 
-    contentBlocks.push({ type: "text", text: buildAnalysisPrompt(jurisdiction, domainDescription) });
+    const skipSections = document.getElementById('skip-sections').value.trim();
+    contentBlocks.push({ type: "text", text: buildAnalysisPrompt(jurisdiction, domainDescription, skipSections) });
 
     const systemPrompt = buildSystemPrompt(jurisdiction, expert.instructions);
 
@@ -850,7 +857,7 @@ OUTPUT: Return a single JSON object (no markdown fences):
 }`;
 }
 
-function buildAnalysisPrompt(juris, domainDesc) {
+function buildAnalysisPrompt(juris, domainDesc, skipSections) {
   return `Please analyze the attached Office Action against the patent application.
 
 Jurisdiction: ${juris}
@@ -861,6 +868,7 @@ Focus ONLY on novelty rejections (Art. 54 EPC / §102 USC) and inventive step re
 Do NOT analyze clarity (Art. 84 EPC), unity of invention, added matter, or any other type of objection.
 Focus ONLY on what the Examiner actually argued.
 Identify any misreadings of the prior art or the invention.
+${skipSections ? `\nThe user has requested to SKIP the following sections — do NOT include them in the analysis:\n${skipSections}` : ''}
 
 IMPORTANT — Conditional arguments:
 Whenever you identify a potential argument that could strengthen the applicant's position, but which requires additional factual information to confirm (e.g. experimental data, specification details, commercial context, technical parameters), explicitly flag it in the analysis as follows:
