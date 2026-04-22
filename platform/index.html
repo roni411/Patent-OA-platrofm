@@ -346,6 +346,7 @@
 // ── State ──
 let jurisdiction = 'EP';
 let uploadedFiles = {};
+let paRefNumbers = [];
 let patentUrls = [];
 let detectedDomain = null;
 let confirmedDomain = null;
@@ -397,7 +398,7 @@ async function trimPriorArt() {
   try {
     // Ask Claude which pages are cited for each reference
     const oaBlock = await fileToContentBlock(uploadedFiles['zone-oa'][0], 'Office Action');
-    const refNames = paFiles.map((f,i) => `D${i+1}: ${f.name}`).join('\n');
+    const refNames = paFiles.map((f,i) => `${paRefNumbers[i] || `D${i+1}`}: ${f.name}`).join('\n');
 
     const resp = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -470,7 +471,7 @@ async function trimPriorArt() {
 
     for (let i = 0; i < paFiles.length; i++) {
       const file = paFiles[i];
-      const key = `D${i+1}`;
+      const key = paRefNumbers[i] || `D${i+1}`;
       const entry = refMap[key] || {};
       const explicitPages = entry.pages || [];
       const sections = entry.sections || [];
@@ -704,8 +705,43 @@ function handleUpload(input, zoneId, statusId) {
   if (!files.length) return;
   zone.classList.add('has-file');
   uploadedFiles[zoneId] = files;
-  const label = files.length > 1 ? `${files.length} קבצים` : files[0].name;
-  status.innerHTML = `✓ ${label} <button onclick="event.stopPropagation();clearUpload('${zoneId}','${statusId}',event)" style="background:none;border:none;color:var(--warning);cursor:pointer;font-size:11px;margin-right:6px;" title="הסר קובץ">✕</button>`;
+
+  if (zoneId === 'zone-pa') {
+    paRefNumbers = files.map((f, i) => `D${i+1}`);
+    status.innerHTML = files.map((f, i) => `
+      <div style="display:flex;align-items:center;gap:6px;margin-top:4px;">
+        <input type="text" value="D${i+1}" onchange="paRefNumbers[${i}]=this.value"
+          style="width:42px;background:var(--surface);border:1px solid var(--accent);border-radius:4px;padding:2px 5px;color:var(--accent);font-size:11px;font-family:var(--mono);text-align:center;"
+          onclick="event.stopPropagation()">
+        <span style="font-size:11px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${f.name}</span>
+        <button onclick="event.stopPropagation();removePaFile(${i})" style="background:none;border:none;color:var(--warning);cursor:pointer;font-size:11px;" title="הסר">✕</button>
+      </div>`).join('');
+  } else {
+    const label = files.length > 1 ? `${files.length} קבצים` : files[0].name;
+    status.innerHTML = `✓ ${label} <button onclick="event.stopPropagation();clearUpload('${zoneId}','${statusId}',event)" style="background:none;border:none;color:var(--warning);cursor:pointer;font-size:11px;margin-right:6px;" title="הסר קובץ">✕</button>`;
+  }
+  checkTrimBtn();
+}
+
+function removePaFile(index) {
+  const files = uploadedFiles['zone-pa'];
+  if (!files) return;
+  files.splice(index, 1);
+  paRefNumbers.splice(index, 1);
+  if (!files.length) {
+    clearUpload('zone-pa', 'pa-status', null);
+    return;
+  }
+  uploadedFiles['zone-pa'] = files;
+  const status = document.getElementById('pa-status');
+  status.innerHTML = files.map((f, i) => `
+    <div style="display:flex;align-items:center;gap:6px;margin-top:4px;">
+      <input type="text" value="${paRefNumbers[i]}" onchange="paRefNumbers[${i}]=this.value"
+        style="width:42px;background:var(--surface);border:1px solid var(--accent);border-radius:4px;padding:2px 5px;color:var(--accent);font-size:11px;font-family:var(--mono);text-align:center;"
+        onclick="event.stopPropagation()">
+      <span style="font-size:11px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${f.name}</span>
+      <button onclick="event.stopPropagation();removePaFile(${i})" style="background:none;border:none;color:var(--warning);cursor:pointer;font-size:11px;" title="הסר">✕</button>
+    </div>`).join('');
   checkTrimBtn();
 }
 
@@ -779,7 +815,7 @@ async function confirmDomain() {
       fileToContentBlock(appFile, "Patent Application (Spec + Claims)"),
       ...prevOaFiles.map((f,i) => fileToContentBlock(f, `Previous Office Action ${i+1}`)),
       ...(pendingFile ? [fileToContentBlock(pendingFile, "Pending Claims (current amended claims)")] : []),
-      ...paFiles.map((f,i) => fileToContentBlock(f, `Prior Art Reference ${i+1}`))
+      ...paFiles.map((f,i) => fileToContentBlock(f, `${paRefNumbers[i] || `D${i+1}`}: ${f.name}`))
     ]);
 
 
