@@ -1346,26 +1346,24 @@ Rules:
 
 async function buildUpdatedExcel() {
   const ab = await citationsExcelFile.arrayBuffer();
-  // No cellStyles on read — avoids phantom cells from borders being treated as data
   const wb = XLSX.read(ab, { type: 'array' });
-  const wsName = wb.SheetNames[0];
+
+  // Match sheet by name "NP Citations", fallback to first sheet
+  const wsName = wb.SheetNames.find(n => n === 'NP Citations') || wb.SheetNames[0];
   const ws = wb.Sheets[wsName];
 
   const range = XLSX.utils.decode_range(ws['!ref'] || 'A1:K4');
-  const numCols = Math.max(range.e.c + 1, 11);
 
-  // Find last row with actual data — check cell.v (real value), not just cell existence
-  let lastDataRow = 3; // row 3 (0-indexed) = Excel row 4 = header row
-  for (let r = range.e.r; r >= 4; r--) {
-    const cellC = ws[XLSX.utils.encode_cell({r, c: 2})];
-    const cellE = ws[XLSX.utils.encode_cell({r, c: 4})];
-    if ((cellC && cellC.v !== undefined) || (cellE && cellE.v !== undefined)) {
-      lastDataRow = r;
+  // Scan downward from row 5 (0-indexed: 4) to find first empty cell in column A
+  // Mirrors the working Python logic: find first row where col A has no value
+  let insertRow = 4; // default: Excel row 5 (0-indexed 4)
+  for (let r = 4; r <= range.e.r + 20; r++) {
+    const cellA = ws[XLSX.utils.encode_cell({r, c: 0})];
+    if (!cellA || cellA.v === undefined || cellA.v === null || cellA.v === '') {
+      insertRow = r;
       break;
     }
   }
-
-  const insertRow = lastDataRow + 1;
   const citations = extractedCitations.citations;
 
   for (let i = 0; i < citations.length; i++) {
