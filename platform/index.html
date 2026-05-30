@@ -1348,63 +1348,59 @@ async function buildUpdatedExcel() {
   const ab = await citationsExcelFile.arrayBuffer();
   const wb = XLSX.read(ab, { type: 'array' });
 
-  // Match sheet by name "NP Citations", fallback to first sheet
+  // Find sheet by name, fallback to first
   const wsName = wb.SheetNames.find(n => n === 'NP Citations') || wb.SheetNames[0];
   const ws = wb.Sheets[wsName];
 
+  // Find first empty row in col A starting from Excel row 5
   const range = XLSX.utils.decode_range(ws['!ref'] || 'A1:K4');
-
-  // Scan downward from row 5 (0-indexed: 4) to find first empty cell in column A
-  // Mirrors the working Python logic: find first row where col A has no value
-  let insertRow = 4; // default: Excel row 5 (0-indexed 4)
+  let insertRow1 = 5; // 1-indexed Excel row
   for (let r = 4; r <= range.e.r + 20; r++) {
     const cellA = ws[XLSX.utils.encode_cell({r, c: 0})];
     if (!cellA || cellA.v === undefined || cellA.v === null || cellA.v === '') {
-      insertRow = r;
+      insertRow1 = r + 1; // 0-indexed → 1-indexed
       break;
     }
   }
+
   const citations = extractedCitations.citations;
 
-  for (let i = 0; i < citations.length; i++) {
-    const r = insertRow + i;
-    const cit = citations[i];
+  // Build 2D array — one row per citation, columns A–H
+  const rows = citations.map((c, i) => [
+    i === 0 ? extractedCitations.oa_type : '',
+    i === 0 ? extractedCitations.oa_date : '',
+    c.number,
+    c.type,
+    c.publication_no,
+    c.publication_date,
+    c.applicant  || '',
+    c.inventors  || ''
+  ]);
 
-    // Columns A+B only on first row (will be merged)
-    if (i === 0) {
-      ws[XLSX.utils.encode_cell({r, c: 0})] = { v: extractedCitations.oa_type, t: 's' };
-      ws[XLSX.utils.encode_cell({r, c: 1})] = { v: extractedCitations.oa_date, t: 's' };
-    }
+  // Write rows into sheet (also updates !ref automatically)
+  XLSX.utils.sheet_add_aoa(ws, rows, { origin: `A${insertRow1}` });
 
-    ws[XLSX.utils.encode_cell({r, c: 2})] = { v: cit.number, t: 's' };
-    ws[XLSX.utils.encode_cell({r, c: 3})] = { v: cit.type, t: 's' };
-    ws[XLSX.utils.encode_cell({r, c: 4})] = { v: cit.publication_no, t: 's' };
-    ws[XLSX.utils.encode_cell({r, c: 5})] = { v: cit.publication_date, t: 's' };
-    if (cit.applicant)  ws[XLSX.utils.encode_cell({r, c: 6})] = { v: cit.applicant, t: 's' };
-    if (cit.inventors)  ws[XLSX.utils.encode_cell({r, c: 7})] = { v: cit.inventors, t: 's' };
-  }
-
-  // Merge A and B across all rows of this OA block
+  // Merge col A and col B across this block
   if (!ws['!merges']) ws['!merges'] = [];
   if (citations.length > 1) {
-    ws['!merges'].push({ s: { r: insertRow, c: 0 }, e: { r: insertRow + citations.length - 1, c: 0 } });
-    ws['!merges'].push({ s: { r: insertRow, c: 1 }, e: { r: insertRow + citations.length - 1, c: 1 } });
+    const r0 = insertRow1 - 1; // back to 0-indexed for merge coords
+    ws['!merges'].push({ s: { r: r0, c: 0 }, e: { r: r0 + citations.length - 1, c: 0 } });
+    ws['!merges'].push({ s: { r: r0, c: 1 }, e: { r: r0 + citations.length - 1, c: 1 } });
   }
 
-  // Update sheet range
-  ws['!ref'] = XLSX.utils.encode_range({
-    s: { r: 0, c: 0 },
-    e: { r: insertRow + citations.length - 1, c: Math.max(range.e.c, 10) }
-  });
-
-  // Update "Last updated" (B1)
+  // Update "Last updated" in B1
   const today = new Date();
   const dd = String(today.getDate()).padStart(2,'0');
   const mm = String(today.getMonth()+1).padStart(2,'0');
   const yyyy = today.getFullYear();
-  ws[XLSX.utils.encode_cell({r: 0, c: 1})] = { v: `${dd}/${mm}/${yyyy}`, t: 's' };
+  ws['B1'] = { v: `${dd}/${mm}/${yyyy}`, t: 's' };
 
   updatedExcelData = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+
+  // Show debug info under the button
+  const statusEl = document.getElementById('citations-status');
+  statusEl.textContent = `גיליון: "${wsName}" · הוספה מ-שורה ${insertRow1} · ${citations.length} שורות נכתבו`;
+  statusEl.style.color = 'var(--success)';
 }
 
 function renderCitationsPreview() {
