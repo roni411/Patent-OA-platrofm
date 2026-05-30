@@ -1377,7 +1377,7 @@ async function buildUpdatedExcel() {
   const wb = XLSX.read(ab, { type: 'array' });
 
   // Find sheet by name, fallback to first
-  const wsName = wb.SheetNames.find(n => n === 'NP Citations') || wb.SheetNames[0];
+  const wsName = wb.SheetNames.find(n => n.toLowerCase() === 'np citations') || wb.SheetNames[0];
   const ws = wb.Sheets[wsName];
 
   // Find first empty row in col A starting from Excel row 5
