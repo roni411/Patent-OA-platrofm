@@ -401,6 +401,9 @@
       <button id="citations-extract-btn" class="analyze-btn" onclick="startCitationExtraction()">
         ⚡ Extract &amp; Update Excel
       </button>
+      <button onclick="startCitationTest()" style="margin:0 14px 10px;width:calc(100% - 28px);background:none;border:1px solid var(--border);border-radius:8px;padding:10px;font-size:11px;color:var(--text-muted);cursor:pointer;font-family:var(--mono);">
+        🧪 Test (no API)
+      </button>
     </div>
 
     <!-- ── API Key — always visible ── -->
@@ -1247,6 +1250,31 @@ function handleCitationsUpload(input, type) {
       else if (name.includes('JP')) originInput.value = 'JP OA';
       else if (name.includes('WO')) originInput.value = 'WO OA';
     }
+  }
+}
+
+async function startCitationTest() {
+  if (!citationsExcelFile) { alert('נא להעלות קובץ Excel'); return; }
+  extractedCitations = {
+    oa_type: 'EP OA',
+    oa_date: '30/05/2026',
+    citations: [
+      { number: 'D1', type: 'X',   publication_no: 'US20150151542A1', publication_date: '04/06/2015', applicant: 'Donnelley & Sons Co', inventors: '' },
+      { number: 'D2', type: 'Y',   publication_no: 'US20090080922A1', publication_date: '26/03/2009', applicant: 'Hewlett Packard Co',   inventors: '' },
+      { number: 'D3', type: 'A',   publication_no: 'WO2020201889A1',  publication_date: '08/10/2020', applicant: 'Landa Corporation Ltd.', inventors: '' },
+      { number: 'D4', type: 'X,Y', publication_no: 'EP0819269B1',     publication_date: '21/01/1998', applicant: 'Hewlett Packard Indigo BV', inventors: '' }
+    ]
+  };
+  document.getElementById('citations-origin-input').value = extractedCitations.oa_type;
+  const statusEl = document.getElementById('citations-status');
+  statusEl.textContent = 'נתוני TEST — בודק כתיבה לאקסל...';
+  statusEl.style.color = 'var(--text-muted)';
+  try {
+    await buildUpdatedExcel();
+    renderCitationsPreview();
+  } catch(err) {
+    statusEl.textContent = 'שגיאה: ' + err.message;
+    statusEl.style.color = 'var(--warning)';
   }
 }
 
