@@ -1368,44 +1368,22 @@ async function buildUpdatedExcel() {
   const insertRow = lastDataRow + 1;
   const citations = extractedCitations.citations;
 
-  // Helper: cell with value + thin borders
-  function mkCell(v, t) {
-    return {
-      v, t,
-      s: {
-        border: {
-          top:    { style: 'thin', color: { rgb: '000000' } },
-          bottom: { style: 'thin', color: { rgb: '000000' } },
-          left:   { style: 'thin', color: { rgb: '000000' } },
-          right:  { style: 'thin', color: { rgb: '000000' } }
-        }
-      }
-    };
-  }
-
   for (let i = 0; i < citations.length; i++) {
     const r = insertRow + i;
     const cit = citations[i];
 
-    // Fill all columns with bordered empty cells first
-    for (let c = 0; c < numCols; c++) {
-      if (!ws[XLSX.utils.encode_cell({r, c})]) {
-        ws[XLSX.utils.encode_cell({r, c})] = mkCell('', 's');
-      }
-    }
-
     // Columns A+B only on first row (will be merged)
     if (i === 0) {
-      ws[XLSX.utils.encode_cell({r, c: 0})] = mkCell(extractedCitations.oa_type, 's');
-      ws[XLSX.utils.encode_cell({r, c: 1})] = mkCell(extractedCitations.oa_date, 's');
+      ws[XLSX.utils.encode_cell({r, c: 0})] = { v: extractedCitations.oa_type, t: 's' };
+      ws[XLSX.utils.encode_cell({r, c: 1})] = { v: extractedCitations.oa_date, t: 's' };
     }
 
-    ws[XLSX.utils.encode_cell({r, c: 2})] = mkCell(cit.number, 's');
-    ws[XLSX.utils.encode_cell({r, c: 3})] = mkCell(cit.type, 's');
-    ws[XLSX.utils.encode_cell({r, c: 4})] = mkCell(cit.publication_no, 's');
-    ws[XLSX.utils.encode_cell({r, c: 5})] = mkCell(cit.publication_date, 's');
-    if (cit.applicant)  ws[XLSX.utils.encode_cell({r, c: 6})] = mkCell(cit.applicant, 's');
-    if (cit.inventors)  ws[XLSX.utils.encode_cell({r, c: 7})] = mkCell(cit.inventors, 's');
+    ws[XLSX.utils.encode_cell({r, c: 2})] = { v: cit.number, t: 's' };
+    ws[XLSX.utils.encode_cell({r, c: 3})] = { v: cit.type, t: 's' };
+    ws[XLSX.utils.encode_cell({r, c: 4})] = { v: cit.publication_no, t: 's' };
+    ws[XLSX.utils.encode_cell({r, c: 5})] = { v: cit.publication_date, t: 's' };
+    if (cit.applicant)  ws[XLSX.utils.encode_cell({r, c: 6})] = { v: cit.applicant, t: 's' };
+    if (cit.inventors)  ws[XLSX.utils.encode_cell({r, c: 7})] = { v: cit.inventors, t: 's' };
   }
 
   // Merge A and B across all rows of this OA block
@@ -1428,8 +1406,7 @@ async function buildUpdatedExcel() {
   const yyyy = today.getFullYear();
   ws[XLSX.utils.encode_cell({r: 0, c: 1})] = { v: `${dd}/${mm}/${yyyy}`, t: 's' };
 
-  // Write with cellStyles:true so the new borders are output
-  updatedExcelData = XLSX.write(wb, { bookType: 'xlsx', type: 'array', cellStyles: true });
+  updatedExcelData = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
 }
 
 function renderCitationsPreview() {
