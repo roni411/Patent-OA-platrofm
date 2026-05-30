@@ -6,6 +6,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 <script src="https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <title>Patent OA Analyzer v2</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Noto+Serif+Hebrew:wght@300;400;600&family=DM+Sans:wght@300;400;500;600&display=swap');
@@ -196,6 +197,15 @@
   ::-webkit-scrollbar { width: 4px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  /* ── Citations table ── */
+  .citations-preview-table { width: 100%; border-collapse: collapse; font-size: 12px; font-family: var(--mono); }
+  .citations-preview-table th { padding: 8px; border: 1px solid var(--border); text-align: left; background: var(--surface3); font-weight: 500; }
+  .citations-preview-table td { padding: 7px 8px; border: 1px solid var(--border); }
+  .citations-preview-table td:first-child { color: var(--accent); }
+  .citations-field-label { font-family: var(--mono); font-size: 9px; letter-spacing: 0.12em; color: var(--text-muted); text-transform: uppercase; margin-bottom: 5px; }
+  .citations-text-input { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; color: var(--text); font-size: 12px; font-family: var(--mono); outline: none; box-sizing: border-box; }
+  .citations-text-input:focus { border-color: var(--accent); }
 </style>
 </head>
 <body>
@@ -239,8 +249,9 @@
   <div class="content">
     <div class="tabs" style="display:flex;align-items:center;justify-content:space-between;">
       <div style="display:flex;">
-        <div class="tab active" onclick="switchTab('analysis')">ניתוח דו"ח הבחינה</div>
-        <div class="tab" onclick="switchTab('response')">טיוטת תשובה</div>
+        <div class="tab active" data-tab="analysis" onclick="switchTab('analysis')">ניתוח דו"ח הבחינה</div>
+        <div class="tab" data-tab="response" onclick="switchTab('response')">טיוטת תשובה</div>
+        <div class="tab" data-tab="citations" onclick="switchTab('citations')">Citations table</div>
       </div>
       <button id="download-all-btn" onclick="downloadAll()" style="display:none;margin-left:14px;margin-right:14px;background:none;border:1px solid var(--border);border-radius:6px;padding:5px 14px;font-size:11px;font-family:var(--mono);color:var(--accent);cursor:pointer;">⬇ הורד הכל (Word)</button>
     </div>
@@ -272,76 +283,133 @@
       <div id="analysis-panel" style="display:none"></div>
       <div id="response-panel" style="display:none"></div>
       <div id="claims-panel" style="display:none"></div>
+      <div id="citations-panel" style="display:none">
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:14px;color:var(--text-muted);padding:60px 20px">
+          <div style="font-size:44px;opacity:0.25">📊</div>
+          <h2 style="font-family:var(--serif);font-size:20px;color:var(--text);font-weight:300">Citations Table</h2>
+          <p style="font-size:13px;max-width:360px;line-height:1.6">העלי קובץ Excel קיים ודו"ח בחינה, ערכי את שדה Citations origin ← לחצי Extract</p>
+          <div class="flow-steps">
+            <div class="flow-step"><div class="flow-num">1</div>העלאת Excel</div>
+            <span class="flow-arrow">←</span>
+            <div class="flow-step"><div class="flow-num">2</div>העלאת OA</div>
+            <span class="flow-arrow">←</span>
+            <div class="flow-step"><div class="flow-num">3</div>Extract</div>
+            <span class="flow-arrow">←</span>
+            <div class="flow-step"><div class="flow-num">4</div>הורדת Excel</div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
   <div class="sidebar">
-    <div class="sidebar-section">
-      <div class="sidebar-label">רשות / Jurisdiction</div>
-      <div class="juris-grid">
-        <div class="juris-btn selected" onclick="selectJuris(this,'EP')"><span class="juris-code">EP</span><span class="juris-name">EPO · Problem-Solution</span></div>
-        <div class="juris-btn" onclick="selectJuris(this,'US')"><span class="juris-code">US</span><span class="juris-name">USPTO · §102/103</span></div>
-        <div class="juris-btn" onclick="selectJuris(this,'CN')"><span class="juris-code">CN</span><span class="juris-name">CNIPA · Art. 22</span></div>
-        <div class="juris-btn" onclick="selectJuris(this,'JP')"><span class="juris-code">JP</span><span class="juris-name">JPO · Art. 29</span></div>
-        <div class="juris-btn" onclick="selectJuris(this,'WO')"><span class="juris-code">WO</span><span class="juris-name">PCT · ISA/IPEA</span></div>
+
+    <!-- ── OA Analyzer sidebar content ── -->
+    <div id="analyzer-sidebar-content">
+      <div class="sidebar-section">
+        <div class="sidebar-label">רשות / Jurisdiction</div>
+        <div class="juris-grid">
+          <div class="juris-btn selected" onclick="selectJuris(this,'EP')"><span class="juris-code">EP</span><span class="juris-name">EPO · Problem-Solution</span></div>
+          <div class="juris-btn" onclick="selectJuris(this,'US')"><span class="juris-code">US</span><span class="juris-name">USPTO · §102/103</span></div>
+          <div class="juris-btn" onclick="selectJuris(this,'CN')"><span class="juris-code">CN</span><span class="juris-name">CNIPA · Art. 22</span></div>
+          <div class="juris-btn" onclick="selectJuris(this,'JP')"><span class="juris-code">JP</span><span class="juris-name">JPO · Art. 29</span></div>
+          <div class="juris-btn" onclick="selectJuris(this,'WO')"><span class="juris-code">WO</span><span class="juris-name">PCT · ISA/IPEA</span></div>
+        </div>
       </div>
+
+      <div class="sidebar-section">
+        <div class="sidebar-label">חומרים נדרשים</div>
+        <div class="upload-zone required" id="zone-oa" onclick="triggerUpload('zone-oa')">
+          <input type="file" accept=".pdf,.doc,.docx" onchange="handleUpload(this,'zone-oa','oa-status')">
+          <div class="upload-header"><span class="upload-icon">📄</span><span class="upload-title">דו"ח בחינה (Office Action)</span></div>
+          <div class="upload-desc">PDF / Word · חובה</div>
+          <div class="upload-status" id="oa-status"></div>
+        </div>
+        <div class="upload-zone" id="zone-prev-oa" onclick="triggerUpload('zone-prev-oa')">
+          <input type="file" accept=".pdf,.doc,.docx" multiple onchange="handleUpload(this,'zone-prev-oa','prev-oa-status')">
+          <div class="upload-header"><span class="upload-icon">📂</span><span class="upload-title">דו"חות בחינה קודמים</span></div>
+          <div class="upload-desc">PDF / Word · מרובים · אופציונלי</div>
+          <div class="upload-status" id="prev-oa-status"></div>
+        </div>
+        <div class="upload-zone required" id="zone-app" onclick="triggerUpload('zone-app')">
+          <input type="file" accept=".pdf,.doc,.docx" onchange="handleUpload(this,'zone-app','app-status')">
+          <div class="upload-header"><span class="upload-icon">📑</span><span class="upload-title">בקשת הפטנט (Spec + Claims)</span></div>
+          <div class="upload-desc">PDF / Word · חובה</div>
+          <div class="upload-status" id="app-status"></div>
+        </div>
+        <div class="upload-zone" id="zone-pending" onclick="triggerUpload('zone-pending')">
+          <input type="file" accept=".pdf,.doc,.docx" onchange="handleUpload(this,'zone-pending','pending-status')">
+          <div class="upload-header"><span class="upload-icon">📝</span><span class="upload-title">Pending Claims</span></div>
+          <div class="upload-desc">PDF / Word · אופציונלי (אם שונות מהבקשה המקורית)</div>
+          <div class="upload-status" id="pending-status"></div>
+        </div>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="sidebar-label">Prior Art</div>
+        <div class="upload-zone" id="zone-pa" onclick="triggerUpload('zone-pa')">
+          <input type="file" accept=".pdf,.doc,.docx" multiple onchange="handleUpload(this,'zone-pa','pa-status')">
+          <div class="upload-header"><span class="upload-icon">🔍</span><span class="upload-title">Prior Art References</span></div>
+          <div class="upload-desc">PDF · מרובים · אופציונלי</div>
+          <div class="upload-status" id="pa-status"></div>
+        </div>
+        <button id="trim-btn" onclick="trimPriorArt()" style="display:none;width:100%;margin-top:6px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px;font-size:11px;cursor:pointer;font-family:var(--mono);color:var(--accent2);">✂️ חתוך לדפים הרלוונטיים אוטומטית</button>
+        <div id="trim-status" style="font-size:10px;color:var(--text-muted);margin-top:5px;font-family:var(--mono);"></div>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="sidebar-label">סעיפים לדילוג (אופציונלי)</div>
+        <textarea id="skip-sections" rows="3" placeholder="למשל: סעיפים 4.1.1-4.1.5, סעיף 5&#10;או: Remarks, dependent claims" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:11px;font-family:var(--mono);outline:none;resize:vertical;direction:rtl;box-sizing:border-box;"></textarea>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:5px;">הזיני מספרי סעיפים או כותרות שאין צורך לנתח</div>
+      </div>
+
+      <button class="analyze-btn" id="analyze-btn" onclick="startAnalysis()">
+        ⚡ נתח דו"ח בחינה
+      </button>
     </div>
 
-    <div class="sidebar-section">
-      <div class="sidebar-label">חומרים נדרשים</div>
-      <div class="upload-zone required" id="zone-oa" onclick="triggerUpload('zone-oa')">
-        <input type="file" accept=".pdf,.doc,.docx" onchange="handleUpload(this,'zone-oa','oa-status')">
-        <div class="upload-header"><span class="upload-icon">📄</span><span class="upload-title">דו"ח בחינה (Office Action)</span></div>
-        <div class="upload-desc">PDF / Word · חובה</div>
-        <div class="upload-status" id="oa-status"></div>
+    <!-- ── Citations table sidebar content ── -->
+    <div id="citations-sidebar-content" style="display:none">
+      <div class="sidebar-section">
+        <div class="sidebar-label">קובץ Excel קיים</div>
+        <div class="upload-zone" id="citations-excel-zone" onclick="document.getElementById('citations-excel-input').click()">
+          <input type="file" id="citations-excel-input" accept=".xlsx,.xls" onchange="handleCitationsUpload(this,'excel')">
+          <div class="upload-header"><span class="upload-icon">📊</span><span class="upload-title">טבלת ציטוטים (Excel)</span></div>
+          <div class="upload-desc">XLSX · חובה</div>
+          <div class="upload-status" id="citations-excel-status"></div>
+        </div>
       </div>
-      <div class="upload-zone" id="zone-prev-oa" onclick="triggerUpload('zone-prev-oa')">
-        <input type="file" accept=".pdf,.doc,.docx" multiple onchange="handleUpload(this,'zone-prev-oa','prev-oa-status')">
-        <div class="upload-header"><span class="upload-icon">📂</span><span class="upload-title">דו"חות בחינה קודמים</span></div>
-        <div class="upload-desc">PDF / Word · מרובים · אופציונלי</div>
-        <div class="upload-status" id="prev-oa-status"></div>
+
+      <div class="sidebar-section">
+        <div class="sidebar-label">דו"ח בחינה לחילוץ</div>
+        <div class="upload-zone" id="citations-oa-zone" onclick="document.getElementById('citations-oa-input').click()">
+          <input type="file" id="citations-oa-input" accept=".pdf,.doc,.docx" onchange="handleCitationsUpload(this,'oa')">
+          <div class="upload-header"><span class="upload-icon">📄</span><span class="upload-title">Office Action</span></div>
+          <div class="upload-desc">PDF / Word · חובה</div>
+          <div class="upload-status" id="citations-oa-status"></div>
+        </div>
       </div>
-      <div class="upload-zone required" id="zone-app" onclick="triggerUpload('zone-app')">
-        <input type="file" accept=".pdf,.doc,.docx" onchange="handleUpload(this,'zone-app','app-status')">
-        <div class="upload-header"><span class="upload-icon">📑</span><span class="upload-title">בקשת הפטנט (Spec + Claims)</span></div>
-        <div class="upload-desc">PDF / Word · חובה</div>
-        <div class="upload-status" id="app-status"></div>
+
+      <div class="sidebar-section">
+        <div class="citations-field-label">Citations origin</div>
+        <input type="text" id="citations-origin-input" class="citations-text-input" placeholder="למשל: EP OA, CN OA, JP OA...">
+        <div style="font-size:10px;color:var(--text-muted);margin-top:5px;">ימולא אוטומטית — ניתן לעריכה</div>
       </div>
-      <div class="upload-zone" id="zone-pending" onclick="triggerUpload('zone-pending')">
-        <input type="file" accept=".pdf,.doc,.docx" onchange="handleUpload(this,'zone-pending','pending-status')">
-        <div class="upload-header"><span class="upload-icon">📝</span><span class="upload-title">Pending Claims</span></div>
-        <div class="upload-desc">PDF / Word · אופציונלי (אם שונות מהבקשה המקורית)</div>
-        <div class="upload-status" id="pending-status"></div>
-      </div>
+
+      <div id="citations-status" style="font-size:10px;color:var(--text-muted);margin:4px 14px 0;font-family:var(--mono);white-space:pre-wrap;"></div>
+
+      <button id="citations-extract-btn" class="analyze-btn" onclick="startCitationExtraction()">
+        ⚡ Extract &amp; Update Excel
+      </button>
     </div>
 
-    <div class="sidebar-section">
-      <div class="sidebar-label">Prior Art</div>
-      <div class="upload-zone" id="zone-pa" onclick="triggerUpload('zone-pa')">
-        <input type="file" accept=".pdf,.doc,.docx" multiple onchange="handleUpload(this,'zone-pa','pa-status')">
-        <div class="upload-header"><span class="upload-icon">🔍</span><span class="upload-title">Prior Art References</span></div>
-        <div class="upload-desc">PDF · מרובים · אופציונלי</div>
-        <div class="upload-status" id="pa-status"></div>
-      </div>
-      <button id="trim-btn" onclick="trimPriorArt()" style="display:none;width:100%;margin-top:6px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px;font-size:11px;cursor:pointer;font-family:var(--mono);color:var(--accent2);">✂️ חתוך לדפים הרלוונטיים אוטומטית</button>
-      <div id="trim-status" style="font-size:10px;color:var(--text-muted);margin-top:5px;font-family:var(--mono);"></div>
-    </div>
-
-    <div class="sidebar-section">
-      <div class="sidebar-label">סעיפים לדילוג (אופציונלי)</div>
-      <textarea id="skip-sections" rows="3" placeholder="למשל: סעיפים 4.1.1-4.1.5, סעיף 5&#10;או: Remarks, dependent claims" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:11px;font-family:var(--mono);outline:none;resize:vertical;direction:rtl;box-sizing:border-box;"></textarea>
-      <div style="font-size:10px;color:var(--text-muted);margin-top:5px;">הזיני מספרי סעיפים או כותרות שאין צורך לנתח</div>
-    </div>
-
+    <!-- ── API Key — always visible ── -->
     <div class="sidebar-section">
       <div class="sidebar-label">Anthropic API Key</div>
       <input type="password" id="api-key-input" placeholder="sk-ant-..." style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:11px;font-family:var(--mono);outline:none;direction:ltr;" oninput="localStorage.setItem('oa_api_key',this.value)">
       <div style="font-size:10px;color:var(--text-muted);margin-top:5px;">Key נשמר מקומית בדפדפן בלבד</div>
     </div>
 
-    <button class="analyze-btn" id="analyze-btn" onclick="startAnalysis()">
-      ⚡ נתח דו"ח בחינה
-    </button>
   </div>
 </main>
 
@@ -761,13 +829,36 @@ function clearUpload(zoneId, statusId, event) {
 
 function switchTab(tab) {
   currentTab = tab;
-  document.querySelectorAll('.tab').forEach((t,i) => {
-    t.classList.toggle('active', ['analysis','response'][i] === tab);
+  document.querySelectorAll('.tab').forEach(t => {
+    const name = t.dataset.tab || (t.getAttribute('onclick')||'').match(/switchTab\('(\w+)'\)/)?.[1];
+    t.classList.toggle('active', name === tab);
   });
-  if (analysisResult) {
-    ['analysis','response'].forEach(t => {
-      document.getElementById(t+'-panel').style.display = t === tab ? 'block' : 'none';
+
+  const isCitations = tab === 'citations';
+  document.getElementById('analyzer-sidebar-content').style.display = isCitations ? 'none' : '';
+  document.getElementById('citations-sidebar-content').style.display = isCitations ? '' : 'none';
+  document.getElementById('citations-panel').style.display = isCitations ? 'block' : 'none';
+
+  const dlBtn = document.getElementById('download-all-btn');
+  if (dlBtn) dlBtn.style.display = (!isCitations && analysisResult) ? 'block' : 'none';
+
+  if (isCitations) {
+    ['analysis','response','claims'].forEach(p => {
+      const el = document.getElementById(p+'-panel');
+      if (el) el.style.display = 'none';
     });
+    document.getElementById('welcome-state').style.display = 'none';
+    document.getElementById('loading-state').classList.remove('active');
+  } else {
+    if (analysisResult) {
+      ['analysis','response','claims'].forEach(p => {
+        const el = document.getElementById(p+'-panel');
+        if (el) el.style.display = p === tab ? 'block' : 'none';
+      });
+      document.getElementById('welcome-state').style.display = 'none';
+    } else {
+      document.getElementById('welcome-state').style.display = 'flex';
+    }
   }
 }
 
@@ -1081,12 +1172,13 @@ async function requestClaimAmendments() {
 
     // Add claims tab if not exists
     const tabs = document.querySelector('.tabs');
-    if (!document.querySelector('[onclick="switchTab(\'claims\')"]')) {
+    if (!document.querySelector('[data-tab="claims"]')) {
       const t = document.createElement('div');
       t.className = 'tab';
+      t.dataset.tab = 'claims';
       t.setAttribute('onclick', "switchTab('claims')");
       t.textContent = 'תיקוני תביעות';
-      tabs.appendChild(t);
+      tabs.querySelector('div').appendChild(t);
     }
     switchTab('claims');
 
@@ -1121,6 +1213,249 @@ function renderDiff(original, amended) {
 }
 
 function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ── Citations table ──
+let citationsOaFile = null;
+let citationsExcelFile = null;
+let extractedCitations = null;
+let updatedExcelData = null;
+
+function handleCitationsUpload(input, type) {
+  const file = input.files[0];
+  if (!file) return;
+  if (type === 'excel') {
+    citationsExcelFile = file;
+    const zone = document.getElementById('citations-excel-zone');
+    zone.classList.add('has-file');
+    const st = document.getElementById('citations-excel-status');
+    st.style.display = 'block';
+    st.innerHTML = `✓ ${file.name} <button onclick="event.stopPropagation();citationsExcelFile=null;document.getElementById('citations-excel-zone').classList.remove('has-file');this.parentElement.innerHTML=''" style="background:none;border:none;color:var(--warning);cursor:pointer;font-size:11px;margin-right:6px;">✕</button>`;
+  } else {
+    citationsOaFile = file;
+    const zone = document.getElementById('citations-oa-zone');
+    zone.classList.add('has-file');
+    const st = document.getElementById('citations-oa-status');
+    st.style.display = 'block';
+    st.innerHTML = `✓ ${file.name} <button onclick="event.stopPropagation();citationsOaFile=null;document.getElementById('citations-oa-zone').classList.remove('has-file');this.parentElement.innerHTML=''" style="background:none;border:none;color:var(--warning);cursor:pointer;font-size:11px;margin-right:6px;">✕</button>`;
+    // Pre-fill Citations origin from filename if possible
+    const originInput = document.getElementById('citations-origin-input');
+    if (!originInput.value) {
+      const name = file.name.toUpperCase();
+      if (name.includes('EP')) originInput.value = 'EP OA';
+      else if (name.includes('US')) originInput.value = 'US OA';
+      else if (name.includes('CN')) originInput.value = 'CN OA';
+      else if (name.includes('JP')) originInput.value = 'JP OA';
+      else if (name.includes('WO')) originInput.value = 'WO OA';
+    }
+  }
+}
+
+async function startCitationExtraction() {
+  if (!citationsOaFile) { alert('נא להעלות קובץ Office Action'); return; }
+  if (!citationsExcelFile) { alert('נא להעלות קובץ Excel'); return; }
+  const apiKey = getApiKey();
+  if (!apiKey) { alert('נא להזין Anthropic API Key'); return; }
+
+  const btn = document.getElementById('citations-extract-btn');
+  const statusEl = document.getElementById('citations-status');
+  btn.disabled = true;
+  btn.textContent = '⏳ מחלץ ציטוטים...';
+  statusEl.textContent = '';
+  statusEl.style.color = 'var(--text-muted)';
+
+  try {
+    const oaBlock = await fileToContentBlock(citationsOaFile, 'Office Action');
+    const manualOrigin = document.getElementById('citations-origin-input').value.trim();
+
+    const prompt = `You are a patent citation extractor. Analyze the Office Action and extract all cited prior art documents.
+
+Return ONLY a JSON object (no markdown fences):
+{
+  "oa_type": "EP OA",
+  "oa_date": "DD/MM/YYYY",
+  "citations": [
+    {
+      "number": "D1",
+      "type": "X",
+      "publication_no": "US20150151542A1",
+      "publication_date": "DD/MM/YYYY",
+      "applicant": "Company Name or empty string",
+      "inventors": "Inventor names or empty string"
+    }
+  ]
+}
+
+Rules:
+- oa_type: detect from content. Format: "EP OA", "US OA", "CN OA", "JP OA", "WO OA"${manualOrigin ? `\n- The user has indicated the OA type is: "${manualOrigin}" — use this value exactly` : ''}
+- oa_date: date of the Office Action in DD/MM/YYYY format
+- number: citation reference number (D1, D2, etc.)
+- type: X (anticipates novelty / Art.54 / §102), Y (relevant for inventive step / Art.56 / §103), X,Y (both), A (background / merely cited)
+  Determine from the Search Report table or examiner's reasoning
+- publication_no: exact publication number as written in the OA
+- publication_date: in DD/MM/YYYY format
+- applicant: applicant/assignee name if mentioned, else empty string
+- inventors: inventor names if mentioned, else empty string`;
+
+    const resp = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 2000,
+        messages: [{ role: "user", content: [oaBlock, { type: "text", text: prompt }] }]
+      })
+    });
+
+    const data = await resp.json();
+    if (!resp.ok || !data.content) throw new Error(data.error?.message || 'API error');
+
+    const raw = data.content.map(c => c.text||'').join('');
+    const clean = raw.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
+    const s = clean.indexOf('{'), e = clean.lastIndexOf('}');
+    extractedCitations = JSON.parse(clean.substring(s, e+1));
+
+    // Apply manual origin override if set
+    if (manualOrigin) extractedCitations.oa_type = manualOrigin;
+
+    // Update the Citations origin field with what was detected/used
+    document.getElementById('citations-origin-input').value = extractedCitations.oa_type;
+
+    // Build updated Excel
+    await buildUpdatedExcel();
+
+    // Show preview in main panel
+    renderCitationsPreview();
+
+    btn.textContent = '✅ הושלם — Extract שוב';
+    btn.disabled = false;
+    statusEl.textContent = `נמצאו ${extractedCitations.citations.length} ציטוטים`;
+    statusEl.style.color = 'var(--success)';
+
+  } catch(err) {
+    btn.disabled = false;
+    btn.textContent = '⚡ Extract & Update Excel';
+    statusEl.textContent = 'שגיאה: ' + err.message;
+    statusEl.style.color = 'var(--warning)';
+  }
+}
+
+async function buildUpdatedExcel() {
+  const ab = await citationsExcelFile.arrayBuffer();
+  const wb = XLSX.read(ab, { type: 'array', cellStyles: true });
+  const wsName = wb.SheetNames[0];
+  const ws = wb.Sheets[wsName];
+
+  // Find last used data row (0-indexed), scanning upward from bottom
+  const range = XLSX.utils.decode_range(ws['!ref'] || 'A1:K50');
+  let lastDataRow = 3; // row index 3 = Excel row 4 (header row), minimum
+  for (let r = range.e.r; r >= 4; r--) {
+    const cellC = ws[XLSX.utils.encode_cell({r, c: 2})]; // Citation no. column
+    const cellE = ws[XLSX.utils.encode_cell({r, c: 4})]; // Publication no. column
+    if (cellC || cellE) { lastDataRow = r; break; }
+  }
+
+  const insertRow = lastDataRow + 1; // 0-indexed
+  const citations = extractedCitations.citations;
+
+  for (let i = 0; i < citations.length; i++) {
+    const r = insertRow + i;
+    const cit = citations[i];
+
+    // Columns A and B only on first row — will be merged below
+    if (i === 0) {
+      ws[XLSX.utils.encode_cell({r, c: 0})] = { v: extractedCitations.oa_type, t: 's' };
+      ws[XLSX.utils.encode_cell({r, c: 1})] = { v: extractedCitations.oa_date, t: 's' };
+    }
+
+    ws[XLSX.utils.encode_cell({r, c: 2})] = { v: cit.number, t: 's' };
+    ws[XLSX.utils.encode_cell({r, c: 3})] = { v: cit.type, t: 's' };
+    ws[XLSX.utils.encode_cell({r, c: 4})] = { v: cit.publication_no, t: 's' };
+    ws[XLSX.utils.encode_cell({r, c: 5})] = { v: cit.publication_date, t: 's' };
+    if (cit.applicant) ws[XLSX.utils.encode_cell({r, c: 6})] = { v: cit.applicant, t: 's' };
+    if (cit.inventors) ws[XLSX.utils.encode_cell({r, c: 7})] = { v: cit.inventors, t: 's' };
+  }
+
+  // Add merges for A and B columns across all rows of this OA
+  if (!ws['!merges']) ws['!merges'] = [];
+  if (citations.length > 1) {
+    ws['!merges'].push({ s: { r: insertRow, c: 0 }, e: { r: insertRow + citations.length - 1, c: 0 } });
+    ws['!merges'].push({ s: { r: insertRow, c: 1 }, e: { r: insertRow + citations.length - 1, c: 1 } });
+  }
+
+  // Extend sheet range
+  ws['!ref'] = XLSX.utils.encode_range({
+    s: { r: 0, c: 0 },
+    e: { r: insertRow + citations.length - 1, c: Math.max(range.e.c, 10) }
+  });
+
+  // Update "Last updated" date in B1 (row 0, col 1)
+  const today = new Date();
+  const dd = String(today.getDate()).padStart(2,'0');
+  const mm = String(today.getMonth()+1).padStart(2,'0');
+  const yyyy = today.getFullYear();
+  ws[XLSX.utils.encode_cell({r: 0, c: 1})] = { v: `${dd}/${mm}/${yyyy}`, t: 's' };
+
+  updatedExcelData = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+}
+
+function renderCitationsPreview() {
+  const panel = document.getElementById('citations-panel');
+  const cits = extractedCitations.citations;
+
+  let rows = cits.map(c => `
+    <tr>
+      <td style="color:var(--accent)">${esc(c.number)}</td>
+      <td>${esc(c.type)}</td>
+      <td>${esc(c.publication_no)}</td>
+      <td>${esc(c.publication_date)}</td>
+      <td style="color:var(--text-muted)">${esc(c.applicant||'')}</td>
+      <td style="color:var(--text-muted)">${esc(c.inventors||'')}</td>
+    </tr>`).join('');
+
+  panel.innerHTML = `
+    <div class="expert-badge">${esc(extractedCitations.oa_type)} · ${esc(extractedCitations.oa_date)} · ${cits.length} ציטוטים</div>
+    <div class="section">
+      <div class="section-hd"><span class="stag stag-gold">תוצאה</span><span class="section-title">ציטוטים שחולצו ונוספו לטבלה</span></div>
+      <div class="card" style="direction:ltr;padding:0;overflow:hidden;">
+        <table class="citations-preview-table">
+          <thead>
+            <tr>
+              <th>#</th><th>Type</th><th>Publication No.</th><th>Pub. Date</th><th>Applicant</th><th>Inventors</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>
+    <div style="text-align:center;margin-top:20px">
+      <button onclick="downloadUpdatedExcel()" style="background:var(--accent);color:var(--bg);border:none;border-radius:8px;padding:12px 32px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--sans);">⬇ הורד Excel מעודכן</button>
+    </div>`;
+}
+
+function downloadUpdatedExcel() {
+  if (!updatedExcelData) { alert('אין נתונים להורדה'); return; }
+  const today = new Date();
+  const dd = String(today.getDate()).padStart(2,'0');
+  const mm = String(today.getMonth()+1).padStart(2,'0');
+  const yy = String(today.getFullYear()).slice(-2);
+  const dateStr = `${dd}${mm}${yy}`;
+  const baseName = (citationsExcelFile.name || 'citations table')
+    .replace(/\.xlsx?$/i, '')
+    .replace(/_/g, ' ')
+    .replace(/Citations/g, 'citations');
+  const blob = new Blob([updatedExcelData], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${baseName} updated ${dateStr}.xlsx`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 function toBase64(file) {
   return new Promise((res,rej) => {
