@@ -1410,22 +1410,6 @@ async function buildUpdatedExcel() {
   // Write rows into sheet (also updates !ref automatically)
   XLSX.utils.sheet_add_aoa(ws, rows, { origin: `A${insertRow1}` });
 
-  // Add thin borders to all newly written cells (cols A–H)
-  const thinBorder = {
-    top:    { style: 'thin' },
-    bottom: { style: 'thin' },
-    left:   { style: 'thin' },
-    right:  { style: 'thin' }
-  };
-  for (let i = 0; i < citations.length; i++) {
-    const r = insertRow1 - 1 + i; // 0-indexed
-    for (let c = 0; c < 8; c++) {
-      const addr = XLSX.utils.encode_cell({r, c});
-      if (!ws[addr]) ws[addr] = { v: '', t: 's' };
-      ws[addr].s = { border: thinBorder };
-    }
-  }
-
   // Merge col A and col B across this block
   if (!ws['!merges']) ws['!merges'] = [];
   if (citations.length > 1) {
@@ -1434,23 +1418,14 @@ async function buildUpdatedExcel() {
     ws['!merges'].push({ s: { r: r0, c: 1 }, e: { r: r0 + citations.length - 1, c: 1 } });
   }
 
-  // Auto-fit column widths based on all cell content
-  const fullRange = XLSX.utils.decode_range(ws['!ref']);
-  const colWidths = {};
-  for (let r = fullRange.s.r; r <= fullRange.e.r; r++) {
-    for (let c = fullRange.s.c; c <= fullRange.e.c; c++) {
-      const cell = ws[XLSX.utils.encode_cell({r, c})];
-      if (cell && cell.v !== undefined && cell.v !== '') {
-        colWidths[c] = Math.max(colWidths[c] || 0, String(cell.v).length);
-      }
-    }
-  }
-  // Minimum widths from header names
-  ['Citations origin','Origin date','Citation no.','Citation type',
-   'Publication no.','Publication date','Applicant','Inventors'].forEach((h, i) => {
-    colWidths[i] = Math.max(colWidths[i] || 0, h.length);
-  });
-  ws['!cols'] = Array.from({ length: fullRange.e.c + 1 }, (_, i) => ({ wch: (colWidths[i] || 8) + 2 }));
+  // Auto-fit column widths: start from header names, expand per data
+  const headers = ['Citations origin','Origin date','Citation no.','Citation type',
+                   'Publication no.','Publication date','Applicant','Inventors'];
+  const widths = headers.map(h => h.length);
+  rows.forEach(row => row.forEach((val, c) => {
+    widths[c] = Math.max(widths[c] || 0, String(val || '').length);
+  }));
+  ws['!cols'] = widths.map(w => ({ wch: w + 2 }));
 
   // Update "Last updated" in B1
   const today = new Date();
@@ -1459,7 +1434,7 @@ async function buildUpdatedExcel() {
   const yyyy = today.getFullYear();
   ws['B1'] = { v: `${dd}/${mm}/${yyyy}`, t: 's' };
 
-  updatedExcelData = XLSX.write(wb, { bookType: 'xlsx', type: 'array', cellStyles: true });
+  updatedExcelData = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
 
   // Show debug info under the button
   const statusEl = document.getElementById('citations-status');
