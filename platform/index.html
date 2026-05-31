@@ -1265,7 +1265,9 @@ async function startCitationTest() {
       { number: 'D4', type: 'X,Y', publication_no: 'EP0819269B1',     publication_date: '21/01/1998', applicant: 'Hewlett Packard Indigo BV', inventors: '' }
     ]
   };
-  document.getElementById('citations-origin-input').value = extractedCitations.oa_type;
+  if (!document.getElementById('citations-origin-input').value.trim()) {
+    document.getElementById('citations-origin-input').value = extractedCitations.oa_type;
+  }
   const statusEl = document.getElementById('citations-status');
   statusEl.textContent = 'נתוני TEST — בודק כתיבה לאקסל...';
   statusEl.style.color = 'var(--text-muted)';
