@@ -1410,18 +1410,13 @@ async function buildUpdatedExcel() {
   // Write rows into sheet (also updates !ref automatically)
   XLSX.utils.sheet_add_aoa(ws, rows, { origin: `A${insertRow1}` });
 
-  // Merge col A and col B across this block + middle alignment
+  // Merge col A and col B across this block
   if (!ws['!merges']) ws['!merges'] = [];
   const r0 = insertRow1 - 1;
   if (citations.length > 1) {
     ws['!merges'].push({ s: { r: r0, c: 0 }, e: { r: r0 + citations.length - 1, c: 0 } });
     ws['!merges'].push({ s: { r: r0, c: 1 }, e: { r: r0 + citations.length - 1, c: 1 } });
   }
-  const centerStyle = { alignment: { vertical: 'center', horizontal: 'center', wrapText: true } };
-  const cellA = ws[XLSX.utils.encode_cell({r: r0, c: 0})];
-  const cellB = ws[XLSX.utils.encode_cell({r: r0, c: 1})];
-  if (cellA) cellA.s = centerStyle;
-  if (cellB) cellB.s = centerStyle;
 
   // Auto-fit column widths: start from header names, expand per data
   const headers = ['Citations origin','Origin date','Citation no.','Citation type',
@@ -1439,7 +1434,7 @@ async function buildUpdatedExcel() {
   const yyyy = today.getFullYear();
   ws['B1'] = { v: `${dd}/${mm}/${yyyy}`, t: 's' };
 
-  updatedExcelData = XLSX.write(wb, { bookType: 'xlsx', type: 'array', cellStyles: true });
+  updatedExcelData = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
 
   // Show debug info under the button
   const statusEl = document.getElementById('citations-status');
