@@ -1426,7 +1426,7 @@ async function buildUpdatedExcel() {
   }
 
   // Middle+center alignment on merged cells
-  const mergeAlign = { vertical: 'middle', horizontal: 'center', wrapText: true };
+  const mergeAlign = { vertical: 'middle', horizontal: 'left', wrapText: true };
   ws.getCell(`A${insertRow}`).alignment = mergeAlign;
   ws.getCell(`B${insertRow}`).alignment = mergeAlign;
 
