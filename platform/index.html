@@ -1408,23 +1408,27 @@ async function buildUpdatedExcel() {
     ws.getCell(rowNum, 8).value = cit.inventors  || '';
   }
 
-  // Merge A and B, set middle+center alignment
+  // Borders on all new rows (cols A–H) — set BEFORE merging
+  const thin = { style: 'thin', color: { argb: 'FF000000' } };
+  const border = { top: thin, bottom: thin, left: thin, right: thin };
+  for (let i = 0; i < citations.length; i++) {
+    const rowObj = ws.getRow(insertRow + i);
+    for (let c = 1; c <= 8; c++) {
+      rowObj.getCell(c).border = border;
+    }
+    rowObj.commit();
+  }
+
+  // Merge A and B — after borders
   if (citations.length > 1) {
     ws.mergeCells(insertRow, 1, insertRow + citations.length - 1, 1);
     ws.mergeCells(insertRow, 2, insertRow + citations.length - 1, 2);
   }
-  const mergeAlign = { vertical: 'middle', horizontal: 'center', wrapText: true };
-  ws.getCell(insertRow, 1).alignment = mergeAlign;
-  ws.getCell(insertRow, 2).alignment = mergeAlign;
 
-  // Borders on all new rows (cols A–H)
-  const thin = { style: 'thin' };
-  const border = { top: thin, bottom: thin, left: thin, right: thin };
-  for (let i = 0; i < citations.length; i++) {
-    for (let c = 1; c <= 8; c++) {
-      ws.getCell(insertRow + i, c).border = border;
-    }
-  }
+  // Middle+center alignment on merged cells
+  const mergeAlign = { vertical: 'middle', horizontal: 'center', wrapText: true };
+  ws.getCell(`A${insertRow}`).alignment = mergeAlign;
+  ws.getCell(`B${insertRow}`).alignment = mergeAlign;
 
   // Auto-fit column widths (cols A–H)
   const headers = ['Citations origin','Origin date','Citation no.','Citation type',
