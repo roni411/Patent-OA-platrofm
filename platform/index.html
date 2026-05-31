@@ -6,7 +6,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 <script src="https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
 <title>Patent OA Analyzer v2</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Noto+Serif+Hebrew:wght@300;400;600&family=DM+Sans:wght@300;400;500;600&display=swap');
@@ -1374,71 +1374,80 @@ Rules:
 
 async function buildUpdatedExcel() {
   const ab = await citationsExcelFile.arrayBuffer();
-  const wb = XLSX.read(ab, { type: 'array' });
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(ab);
 
-  // Find sheet by name, fallback to first
-  const wsName = wb.SheetNames.find(n => n.toLowerCase() === 'np citations') || wb.SheetNames[0];
-  const ws = wb.Sheets[wsName];
+  // Find sheet by name (case-insensitive), fallback to first
+  const ws = workbook.worksheets.find(s => s.name.toLowerCase() === 'np citations')
+             || workbook.worksheets[0];
+  const wsName = ws.name;
 
-  // Find first empty row in col A starting from Excel row 5
-  const range = XLSX.utils.decode_range(ws['!ref'] || 'A1:K4');
-  let insertRow1 = 5; // 1-indexed Excel row
-  for (let r = 4; r <= range.e.r + 20; r++) {
-    const cellA = ws[XLSX.utils.encode_cell({r, c: 0})];
-    if (!cellA || cellA.v === undefined || cellA.v === null || cellA.v === '') {
-      insertRow1 = r + 1; // 0-indexed → 1-indexed
-      break;
-    }
+  // Find first empty row in col A starting from row 5
+  let insertRow = 5;
+  for (let r = 5; r <= ws.rowCount + 20; r++) {
+    const cell = ws.getCell(r, 1);
+    if (cell.value == null || cell.value === '') { insertRow = r; break; }
   }
 
   const citations = extractedCitations.citations;
-  // Use the value currently in the sidebar input (user may have edited it)
   const oaType = document.getElementById('citations-origin-input').value.trim() || extractedCitations.oa_type;
 
-  // Build 2D array — one row per citation, columns A–H
-  const rows = citations.map((c, i) => [
-    i === 0 ? oaType : '',
-    i === 0 ? extractedCitations.oa_date : '',
-    c.number,
-    c.type,
-    c.publication_no,
-    c.publication_date,
-    c.applicant  || '',
-    c.inventors  || ''
-  ]);
-
-  // Write rows into sheet (also updates !ref automatically)
-  XLSX.utils.sheet_add_aoa(ws, rows, { origin: `A${insertRow1}` });
-
-  // Merge col A and col B across this block
-  if (!ws['!merges']) ws['!merges'] = [];
-  const r0 = insertRow1 - 1;
-  if (citations.length > 1) {
-    ws['!merges'].push({ s: { r: r0, c: 0 }, e: { r: r0 + citations.length - 1, c: 0 } });
-    ws['!merges'].push({ s: { r: r0, c: 1 }, e: { r: r0 + citations.length - 1, c: 1 } });
+  // Write citation rows
+  for (let i = 0; i < citations.length; i++) {
+    const rowNum = insertRow + i;
+    const cit = citations[i];
+    if (i === 0) {
+      ws.getCell(rowNum, 1).value = oaType;
+      ws.getCell(rowNum, 2).value = extractedCitations.oa_date;
+    }
+    ws.getCell(rowNum, 3).value = cit.number;
+    ws.getCell(rowNum, 4).value = cit.type;
+    ws.getCell(rowNum, 5).value = cit.publication_no;
+    ws.getCell(rowNum, 6).value = cit.publication_date;
+    ws.getCell(rowNum, 7).value = cit.applicant  || '';
+    ws.getCell(rowNum, 8).value = cit.inventors  || '';
   }
 
-  // Auto-fit column widths: start from header names, expand per data
+  // Merge A and B, set middle+center alignment
+  if (citations.length > 1) {
+    ws.mergeCells(insertRow, 1, insertRow + citations.length - 1, 1);
+    ws.mergeCells(insertRow, 2, insertRow + citations.length - 1, 2);
+  }
+  const mergeAlign = { vertical: 'middle', horizontal: 'center', wrapText: true };
+  ws.getCell(insertRow, 1).alignment = mergeAlign;
+  ws.getCell(insertRow, 2).alignment = mergeAlign;
+
+  // Borders on all new rows (cols A–H)
+  const thin = { style: 'thin' };
+  const border = { top: thin, bottom: thin, left: thin, right: thin };
+  for (let i = 0; i < citations.length; i++) {
+    for (let c = 1; c <= 8; c++) {
+      ws.getCell(insertRow + i, c).border = border;
+    }
+  }
+
+  // Auto-fit column widths (cols A–H)
   const headers = ['Citations origin','Origin date','Citation no.','Citation type',
                    'Publication no.','Publication date','Applicant','Inventors'];
   const widths = headers.map(h => h.length);
-  rows.forEach(row => row.forEach((val, c) => {
-    widths[c] = Math.max(widths[c] || 0, String(val || '').length);
-  }));
-  ws['!cols'] = widths.map(w => ({ wch: w + 2 }));
+  citations.forEach(cit => {
+    [oaType, extractedCitations.oa_date, cit.number, cit.type,
+     cit.publication_no, cit.publication_date, cit.applicant||'', cit.inventors||'']
+      .forEach((v, i) => { widths[i] = Math.max(widths[i], String(v||'').length); });
+  });
+  widths.forEach((w, i) => { ws.getColumn(i + 1).width = w + 2; });
 
   // Update "Last updated" in B1
   const today = new Date();
   const dd = String(today.getDate()).padStart(2,'0');
   const mm = String(today.getMonth()+1).padStart(2,'0');
   const yyyy = today.getFullYear();
-  ws['B1'] = { v: `${dd}/${mm}/${yyyy}`, t: 's' };
+  ws.getCell('B1').value = `${dd}/${mm}/${yyyy}`;
 
-  updatedExcelData = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  updatedExcelData = await workbook.xlsx.writeBuffer();
 
-  // Show debug info under the button
   const statusEl = document.getElementById('citations-status');
-  statusEl.textContent = `גיליון: "${wsName}" · הוספה מ-שורה ${insertRow1} · ${citations.length} שורות נכתבו`;
+  statusEl.textContent = `גיליון: "${wsName}" · הוספה מ-שורה ${insertRow} · ${citations.length} שורות נכתבו`;
   statusEl.style.color = 'var(--success)';
 }
 
