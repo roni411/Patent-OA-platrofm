@@ -1392,10 +1392,12 @@ async function buildUpdatedExcel() {
   }
 
   const citations = extractedCitations.citations;
+  // Use the value currently in the sidebar input (user may have edited it)
+  const oaType = document.getElementById('citations-origin-input').value.trim() || extractedCitations.oa_type;
 
   // Build 2D array — one row per citation, columns A–H
   const rows = citations.map((c, i) => [
-    i === 0 ? extractedCitations.oa_type : '',
+    i === 0 ? oaType : '',
     i === 0 ? extractedCitations.oa_date : '',
     c.number,
     c.type,
