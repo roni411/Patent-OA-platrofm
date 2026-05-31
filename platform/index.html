@@ -1322,6 +1322,12 @@ Rules:
     // Apply manual origin override if set
     if (manualOrigin) extractedCitations.oa_type = manualOrigin;
 
+    // Fallback: extract date from OA filename if Claude didn't find it
+    if (!extractedCitations.oa_date) {
+      const m = citationsOaFile.name.match(/(\d{2})(\d{2})(\d{2})/);
+      if (m) extractedCitations.oa_date = `${m[1]}/${m[2]}/20${m[3]}`;
+    }
+
     // Update the Citations origin field with what was detected/used
     document.getElementById('citations-origin-input').value = extractedCitations.oa_type;
 
@@ -1374,6 +1380,7 @@ async function buildUpdatedExcel() {
     }
     ws.getCell(rowNum, 3).value = cit.number;
     ws.getCell(rowNum, 4).value = cit.type;
+    ws.getCell(rowNum, 4).font = { bold: true };
     ws.getCell(rowNum, 5).value = cit.publication_no;
     ws.getCell(rowNum, 6).value = cit.publication_date;
     ws.getCell(rowNum, 7).value = cit.applicant  || '';
@@ -1471,7 +1478,8 @@ function downloadUpdatedExcel() {
   const baseName = (citationsExcelFile.name || 'citations table')
     .replace(/\.xlsx?$/i, '')
     .replace(/_/g, ' ')
-    .replace(/Citations/g, 'citations');
+    .replace(/Citations/g, 'citations')
+    .replace(/\s+updated\s+\d{6}$/i, '');
   const blob = new Blob([updatedExcelData], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
