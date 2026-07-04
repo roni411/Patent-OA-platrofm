@@ -383,7 +383,7 @@
       <div class="sidebar-section">
         <div class="sidebar-label">דו"ח בחינה לחילוץ</div>
         <div class="upload-zone" id="citations-oa-zone" onclick="document.getElementById('citations-oa-input').click()">
-          <input type="file" id="citations-oa-input" accept=".pdf,.doc,.docx" onchange="handleCitationsUpload(this,'oa')">
+          <input type="file" id="citations-oa-input" accept=".pdf,.doc,.docx,.md" onchange="handleCitationsUpload(this,'oa')">
           <div class="upload-header"><span class="upload-icon">📄</span><span class="upload-title">Office Action</span></div>
           <div class="upload-desc">PDF / Word · חובה</div>
           <div class="upload-status" id="citations-oa-status"></div>
@@ -442,6 +442,10 @@ async function fileToContentBlock(file, title) {
   const ext = file.name.split('.').pop().toLowerCase();
   if (ext === 'docx' || ext === 'doc') {
     const text = await docxToText(file);
+    return { type: "text", text: `[${title}]\n${text}` };
+  }
+  if (ext === 'md') {
+    const text = await file.text();
     return { type: "text", text: `[${title}]\n${text}` };
   }
   const b64 = await toBase64(file);
