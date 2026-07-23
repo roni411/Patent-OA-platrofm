@@ -206,6 +206,10 @@
   .citations-field-label { font-family: var(--mono); font-size: 9px; letter-spacing: 0.12em; color: var(--text-muted); text-transform: uppercase; margin-bottom: 5px; }
   .citations-text-input { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; color: var(--text); font-size: 12px; font-family: var(--mono); outline: none; box-sizing: border-box; }
   .citations-text-input:focus { border-color: var(--accent); }
+  .citations-select { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 7px 8px; color: var(--text); font-size: 12px; font-family: var(--sans); outline: none; box-sizing: border-box; cursor: pointer; }
+  .citations-select:focus { border-color: var(--accent); }
+  .format-btn { flex: 1; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 6px 0; font-size: 11px; font-family: var(--mono); color: var(--text-muted); cursor: pointer; transition: all 0.15s; }
+  .format-btn.active { background: var(--accent); color: var(--bg); border-color: var(--accent); font-weight: 600; }
 </style>
 </head>
 <body>
@@ -385,15 +389,43 @@
         <div class="upload-zone" id="citations-oa-zone" onclick="document.getElementById('citations-oa-input').click()">
           <input type="file" id="citations-oa-input" accept=".pdf,.doc,.docx,.md" onchange="handleCitationsUpload(this,'oa')">
           <div class="upload-header"><span class="upload-icon">📄</span><span class="upload-title">Office Action</span></div>
-          <div class="upload-desc">PDF / Word · חובה</div>
+          <div class="upload-desc">PDF / Word / MD · חובה</div>
           <div class="upload-status" id="citations-oa-status"></div>
         </div>
       </div>
 
       <div class="sidebar-section">
-        <div class="citations-field-label">Citations origin</div>
-        <input type="text" id="citations-origin-input" class="citations-text-input" placeholder="למשל: EP OA, CN OA, JP OA...">
-        <div style="font-size:10px;color:var(--text-muted);margin-top:5px;">ימולא אוטומטית — ניתן לעריכה</div>
+        <div class="citations-field-label">פורמט לקוח</div>
+        <div style="display:flex;gap:6px;margin-top:4px;">
+          <button class="format-btn active" id="format-btn-ldp" onclick="setCitationsFormat('LDP')">LDP</button>
+          <button class="format-btn" id="format-btn-landalabs" onclick="setCitationsFormat('LandaLabs')">Landa Labs</button>
+        </div>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="citations-field-label">Patent Office</div>
+        <select id="citations-office-select" class="citations-select">
+          <option value="">— בחר —</option>
+          <option value="EP">EP</option>
+          <option value="US">US</option>
+          <option value="CN">CN</option>
+          <option value="JP">JP</option>
+          <option value="WO">WO</option>
+          <option value="KR">KR</option>
+        </select>
+      </div>
+      <div class="sidebar-section" style="margin-top:-8px;">
+        <div class="citations-field-label">Type of Doc</div>
+        <select id="citations-doctype-select" class="citations-select">
+          <option value="">— בחר —</option>
+          <option value="1st OA">1st OA</option>
+          <option value="2nd OA">2nd OA</option>
+          <option value="3rd OA">3rd OA</option>
+          <option value="ISR">ISR</option>
+          <option value="IPER">IPER</option>
+          <option value="OA">OA</option>
+        </select>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:5px;">ימולאו אוטומטית — ניתן לשנות</div>
       </div>
 
       <div id="citations-status" style="font-size:10px;color:var(--text-muted);margin:4px 14px 0;font-family:var(--mono);white-space:pre-wrap;"></div>
@@ -1223,6 +1255,13 @@ let citationsOaFile = null;
 let citationsExcelFile = null;
 let extractedCitations = null;
 let updatedExcelData = null;
+let citationsFormat = 'LDP'; // 'LDP' or 'LandaLabs'
+
+function setCitationsFormat(fmt) {
+  citationsFormat = fmt;
+  document.getElementById('format-btn-ldp').classList.toggle('active', fmt === 'LDP');
+  document.getElementById('format-btn-landalabs').classList.toggle('active', fmt === 'LandaLabs');
+}
 
 function handleCitationsUpload(input, type) {
   const file = input.files[0];
@@ -1241,15 +1280,16 @@ function handleCitationsUpload(input, type) {
     const st = document.getElementById('citations-oa-status');
     st.style.display = 'block';
     st.innerHTML = `✓ ${file.name} <button onclick="event.stopPropagation();citationsOaFile=null;document.getElementById('citations-oa-zone').classList.remove('has-file');this.parentElement.innerHTML=''" style="background:none;border:none;color:var(--warning);cursor:pointer;font-size:11px;margin-right:6px;">✕</button>`;
-    // Pre-fill Citations origin from filename if possible
-    const originInput = document.getElementById('citations-origin-input');
-    if (!originInput.value) {
+    // Pre-fill Patent Office from filename if not already selected
+    const officeEl = document.getElementById('citations-office-select');
+    if (!officeEl.value) {
       const name = file.name.toUpperCase();
-      if (name.includes('EP')) originInput.value = 'EP OA';
-      else if (name.includes('US')) originInput.value = 'US OA';
-      else if (name.includes('CN')) originInput.value = 'CN OA';
-      else if (name.includes('JP')) originInput.value = 'JP OA';
-      else if (name.includes('WO')) originInput.value = 'WO OA';
+      if (name.includes('EP')) officeEl.value = 'EP';
+      else if (name.includes('US')) officeEl.value = 'US';
+      else if (name.includes('CN')) officeEl.value = 'CN';
+      else if (name.includes('JP')) officeEl.value = 'JP';
+      else if (name.includes('WO')) officeEl.value = 'WO';
+      else if (name.includes('KR')) officeEl.value = 'KR';
     }
   }
 }
@@ -1269,13 +1309,15 @@ async function startCitationExtraction() {
 
   try {
     const oaBlock = await fileToContentBlock(citationsOaFile, 'Office Action');
-    const manualOrigin = document.getElementById('citations-origin-input').value.trim();
+    const manualOffice = document.getElementById('citations-office-select').value.trim();
+    const manualDocType = document.getElementById('citations-doctype-select').value.trim();
 
     const prompt = `You are a patent citation extractor. Analyze the Office Action and extract all cited prior art documents.
 
 Return ONLY a JSON object (no markdown fences):
 {
-  "oa_type": "EP OA",
+  "patent_office": "EP",
+  "doc_type": "1st OA",
   "oa_date": "DD/MM/YYYY",
   "citations": [
     {
@@ -1290,7 +1332,8 @@ Return ONLY a JSON object (no markdown fences):
 }
 
 Rules:
-- oa_type: detect from content. Format: "EP OA", "US OA", "CN OA", "JP OA", "WO OA"${manualOrigin ? `\n- The user has indicated the OA type is: "${manualOrigin}" — use this value exactly` : ''}
+- patent_office: one of EP, US, CN, JP, WO, KR${manualOffice ? `\n- The user indicated the patent office is: "${manualOffice}" — use this value exactly` : ''}
+- doc_type: "1st OA" if first office action, "2nd OA" if second, "3rd OA" if third, "ISR" if international search report, "IPER" if preliminary examination report, "OA" if unclear${manualDocType ? `\n- The user indicated the document type is: "${manualDocType}" — use this value exactly` : ''}
 - oa_date: date of the Office Action in DD/MM/YYYY format
 - number: citation reference number (D1, D2, etc.)
 - type: X (anticipates novelty / Art.54 / §102), Y (relevant for inventive step / Art.56 / §103), X,Y (both), A (background / merely cited)
@@ -1323,8 +1366,9 @@ Rules:
     const s = clean.indexOf('{'), e = clean.lastIndexOf('}');
     extractedCitations = JSON.parse(clean.substring(s, e+1));
 
-    // Apply manual origin override if set
-    if (manualOrigin) extractedCitations.oa_type = manualOrigin;
+    // Apply manual overrides
+    if (manualOffice) extractedCitations.patent_office = manualOffice;
+    if (manualDocType) extractedCitations.doc_type = manualDocType;
 
     // Fallback: extract date from OA filename if Claude didn't find it
     if (!extractedCitations.oa_date) {
@@ -1332,19 +1376,25 @@ Rules:
       if (m) extractedCitations.oa_date = `${m[1]}/${m[2]}/20${m[3]}`;
     }
 
-    // Update the Citations origin field with what was detected/used
-    document.getElementById('citations-origin-input').value = extractedCitations.oa_type;
+    // Fill dropdowns with extracted/resolved values
+    if (extractedCitations.patent_office)
+      document.getElementById('citations-office-select').value = extractedCitations.patent_office;
+    if (extractedCitations.doc_type)
+      document.getElementById('citations-doctype-select').value = extractedCitations.doc_type;
 
-    // Build updated Excel
-    await buildUpdatedExcel();
+    // Build updated Excel (branch by format)
+    if (citationsFormat === 'LandaLabs') {
+      await buildUpdatedExcelLandaLabs();
+    } else {
+      await buildUpdatedExcel();
+    }
 
     // Show preview in main panel
     renderCitationsPreview();
 
     btn.textContent = '✅ הושלם — Extract שוב';
     btn.disabled = false;
-    statusEl.textContent = `נמצאו ${extractedCitations.citations.length} ציטוטים`;
-    statusEl.style.color = 'var(--success)';
+    // status is set by buildUpdatedExcel() — don't overwrite it
 
   } catch(err) {
     btn.disabled = false;
@@ -1357,12 +1407,23 @@ Rules:
 async function buildUpdatedExcel() {
   const ab = await citationsExcelFile.arrayBuffer();
   const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(ab);
+
+  try {
+    await workbook.xlsx.load(ab);
+  } catch(loadErr) {
+    throw new Error(`שגיאה בטעינת Excel: ${loadErr.message}`);
+  }
+
+  console.log('ExcelJS sheets:', workbook.worksheets.map(s => s.name));
+  if (!workbook.worksheets || workbook.worksheets.length === 0) {
+    throw new Error('קובץ Excel לא נטען — 0 גיליונות (פורמט לא נתמך?)');
+  }
 
   // Find sheet by name (case-insensitive), fallback to first
   const ws = workbook.worksheets.find(s => s.name.toLowerCase() === 'np citations')
              || workbook.worksheets[0];
   const wsName = ws.name;
+  console.log('Using sheet:', wsName, '| rowCount:', ws.rowCount);
 
   // Find first empty row in col A starting from row 5
   let insertRow = 5;
@@ -1372,7 +1433,9 @@ async function buildUpdatedExcel() {
   }
 
   const citations = extractedCitations.citations;
-  const oaType = document.getElementById('citations-origin-input').value.trim() || extractedCitations.oa_type;
+  const patentOffice = document.getElementById('citations-office-select').value.trim() || extractedCitations.patent_office || '';
+  const docType = document.getElementById('citations-doctype-select').value.trim() || extractedCitations.doc_type || '';
+  const oaType = `${patentOffice} ${docType}`.trim();
 
   // Write citation rows
   for (let i = 0; i < citations.length; i++) {
@@ -1418,7 +1481,7 @@ async function buildUpdatedExcel() {
                    'Publication no.','Publication date','Applicant','Inventors'];
   const widths = headers.map(h => h.length);
   citations.forEach(cit => {
-    [oaType, extractedCitations.oa_date, cit.number, cit.type,
+    [oaType, extractedCitations.oa_date || '', cit.number, cit.type,
      cit.publication_no, cit.publication_date, cit.applicant||'', cit.inventors||'']
       .forEach((v, i) => { widths[i] = Math.max(widths[i], String(v||'').length); });
   });
@@ -1433,8 +1496,127 @@ async function buildUpdatedExcel() {
 
   updatedExcelData = await workbook.xlsx.writeBuffer();
 
+  const bufSize = updatedExcelData ? (updatedExcelData.byteLength || updatedExcelData.length || 0) : 0;
+  console.log('writeBuffer size:', bufSize, 'bytes');
+  if (!bufSize) throw new Error('writeBuffer החזיר buffer ריק');
+
   const statusEl = document.getElementById('citations-status');
-  statusEl.textContent = `גיליון: "${wsName}" · הוספה מ-שורה ${insertRow} · ${citations.length} שורות נכתבו`;
+  statusEl.textContent = `גיליון: "${wsName}" · שורה ${insertRow} · ${citations.length} שורות · ${Math.round(bufSize/1024)}KB`;
+  statusEl.style.color = 'var(--success)';
+}
+
+async function buildUpdatedExcelLandaLabs() {
+  const ab = await citationsExcelFile.arrayBuffer();
+  const workbook = new ExcelJS.Workbook();
+
+  try {
+    await workbook.xlsx.load(ab);
+  } catch(loadErr) {
+    throw new Error(`שגיאה בטעינת Excel: ${loadErr.message}`);
+  }
+
+  if (!workbook.worksheets || workbook.worksheets.length === 0) {
+    throw new Error('קובץ Excel לא נטען — 0 גיליונות');
+  }
+
+  // Find "SR-OA Content" sheet (case-insensitive), fallback to first
+  const ws = workbook.worksheets.find(s => s.name.toLowerCase() === 'sr-oa content')
+             || workbook.worksheets[0];
+  const wsName = ws.name;
+  console.log('Landa Labs sheet:', wsName, '| rowCount:', ws.rowCount);
+
+  const citations = extractedCitations.citations;
+  const patentOffice = (document.getElementById('citations-office-select').value.trim() || extractedCitations.patent_office || '').toUpperCase();
+  const docType = document.getElementById('citations-doctype-select').value.trim() || extractedCitations.doc_type || '';
+  const oaDate = extractedCitations.oa_date || '';
+
+  // Helper: convert DD/MM/YYYY to other formats
+  function convertDate(ddmmyyyy, fmt) {
+    if (!ddmmyyyy) return '';
+    const parts = String(ddmmyyyy).split('/');
+    if (parts.length !== 3) return ddmmyyyy;
+    const [dd, mm, yyyy] = parts;
+    if (fmt === 'mm-dd-yyyy') return `${mm}-${dd}-${yyyy}`;
+    if (fmt === 'dd-mm-yyyy') return `${dd}-${mm}-${yyyy}`;
+    return ddmmyyyy;
+  }
+
+  // Smart D-numbering: scan col D for existing Dn of same patent office
+  // Track current office across merged cells (null = continuation of above)
+  let startDNum = 1;
+  let currentOffice = '';
+  for (let r = 5; r <= ws.rowCount; r++) {
+    const aVal = ws.getCell(r, 1).value;
+    if (aVal != null && String(aVal).trim() !== '') {
+      currentOffice = String(aVal).trim().toUpperCase();
+    }
+    if (currentOffice === patentOffice) {
+      const dVal = ws.getCell(r, 4).value;
+      const m = String(dVal || '').match(/D(\d+)/i);
+      if (m) startDNum = Math.max(startDNum, parseInt(m[1]) + 1);
+    }
+  }
+
+  // Find last data row (last row with any content in cols A–J)
+  let lastDataRow = 4;
+  for (let r = 5; r <= ws.rowCount + 5; r++) {
+    let hasData = false;
+    for (let c = 1; c <= 10; c++) {
+      if (ws.getCell(r, c).value != null) { hasData = true; break; }
+    }
+    if (hasData) lastDataRow = r;
+  }
+  const insertRow = lastDataRow + 1;
+
+  // If there's content below insertRow, insert rows to push it down
+  let hasContentBelow = false;
+  for (let r = insertRow; r <= ws.rowCount; r++) {
+    for (let c = 1; c <= 20; c++) {
+      if (ws.getCell(r, c).value != null) { hasContentBelow = true; break; }
+    }
+    if (hasContentBelow) break;
+  }
+  if (hasContentBelow) {
+    ws.spliceRows(insertRow, 0, ...Array(citations.length).fill(null).map(() => []));
+  }
+
+  // Write citation rows
+  for (let i = 0; i < citations.length; i++) {
+    const rowNum = insertRow + i;
+    const cit = citations[i];
+    const firstInventor = (cit.inventors || '').split(/[,;]/)[0].trim();
+    ws.getCell(rowNum, 1).value  = patentOffice;
+    ws.getCell(rowNum, 2).value  = docType;
+    ws.getCell(rowNum, 3).value  = oaDate;
+    ws.getCell(rowNum, 4).value  = `D${startDNum + i}`;
+    ws.getCell(rowNum, 5).value  = cit.publication_no;
+    ws.getCell(rowNum, 6).value  = convertDate(cit.publication_date, 'mm-dd-yyyy');
+    ws.getCell(rowNum, 7).value  = convertDate(cit.publication_date, 'dd-mm-yyyy');
+    ws.getCell(rowNum, 8).value  = firstInventor;
+    ws.getCell(rowNum, 9).value  = cit.applicant || '';
+    ws.getCell(rowNum, 10).value = cit.type;
+  }
+
+  // Update "Last updated" — find cell in first 10 rows, update cell to its right
+  const today = new Date();
+  const todayStr = `${String(today.getDate()).padStart(2,'0')}/${String(today.getMonth()+1).padStart(2,'0')}/${today.getFullYear()}`;
+  for (let r = 1; r <= 10; r++) {
+    for (let c = 1; c <= 20; c++) {
+      if (String(ws.getCell(r, c).value || '').toLowerCase().includes('last updat')) {
+        ws.getCell(r, c + 1).value = today; // Set as Date so existing cell format applies
+        break;
+      }
+    }
+  }
+
+  updatedExcelData = await workbook.xlsx.writeBuffer();
+  const bufSize = updatedExcelData ? (updatedExcelData.byteLength || updatedExcelData.length || 0) : 0;
+  console.log('Landa Labs writeBuffer size:', bufSize);
+  if (!bufSize) throw new Error('writeBuffer החזיר buffer ריק');
+
+  const statusEl = document.getElementById('citations-status');
+  const lastDNum = startDNum + citations.length - 1;
+  statusEl.textContent = `[Landa Labs] "${wsName}" · שורה ${insertRow} · D${startDNum}–D${lastDNum} · ${Math.round(bufSize/1024)}KB`;
   statusEl.style.color = 'var(--success)';
 }
 
@@ -1453,7 +1635,7 @@ function renderCitationsPreview() {
     </tr>`).join('');
 
   panel.innerHTML = `
-    <div class="expert-badge">${esc(extractedCitations.oa_type)} · ${esc(extractedCitations.oa_date)} · ${cits.length} ציטוטים</div>
+    <div class="expert-badge">${esc(extractedCitations.patent_office||'')} ${esc(extractedCitations.doc_type||'')} · ${esc(extractedCitations.oa_date||'')} · ${cits.length} ציטוטים</div>
     <div class="section">
       <div class="section-hd"><span class="stag stag-gold">תוצאה</span><span class="section-title">ציטוטים שחולצו ונוספו לטבלה</span></div>
       <div class="card" style="direction:ltr;padding:0;overflow:hidden;">
