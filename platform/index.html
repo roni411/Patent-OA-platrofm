@@ -1308,7 +1308,7 @@ async function startCitationExtraction() {
   statusEl.style.color = 'var(--text-muted)';
 
   try {
-    const oaBlock = await fileToContentBlock(citationsOaFile, 'Office Action');
+    let oaBlock = await fileToContentBlock(citationsOaFile, 'Office Action');
     const manualOffice = document.getElementById('citations-office-select').value.trim();
     const manualDocType = document.getElementById('citations-doctype-select').value.trim();
 
@@ -1362,6 +1362,9 @@ Rules:
     if (!resp.ok || !data.content) throw new Error(data.error?.message || 'API error');
 
     const raw = data.content.map(c => c.text||'').join('');
+    // Free the OA content from memory before loading Excel
+    oaBlock = null;
+
     const clean = raw.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
     const s = clean.indexOf('{'), e = clean.lastIndexOf('}');
     extractedCitations = JSON.parse(clean.substring(s, e+1));
@@ -1381,6 +1384,12 @@ Rules:
       document.getElementById('citations-office-select').value = extractedCitations.patent_office;
     if (extractedCitations.doc_type)
       document.getElementById('citations-doctype-select').value = extractedCitations.doc_type;
+
+    // Update status + yield to GC before loading Excel into memory
+    statusEl.textContent = `נמצאו ${extractedCitations.citations.length} ציטוטים · טוען Excel...`;
+    statusEl.style.color = 'var(--text-muted)';
+    btn.textContent = '⏳ מעדכן Excel...';
+    await new Promise(r => setTimeout(r, 80));
 
     // Build updated Excel (branch by format)
     if (citationsFormat === 'LandaLabs') {
